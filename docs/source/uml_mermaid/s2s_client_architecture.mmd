@@ -1,0 +1,10 @@
+flowchart LR
+    s2sApp[S2SApp] --> args[S2SArgsFactory]
+    s2sApp --> audioSource[AudioSourceSimulator]
+    s2sApp --> audioSink[AudioSinkSimulator]
+    s2sApp --> s2sStub[SpeechToSpeechStub]
+    s2sApp --> latency[LatencyAnalysis]
+    s2sApp --> health[ServiceHealthCheck]
+    s2sStub --> s2sService[SpeechToSpeechService]
+    s2sStub --> s2sReq[SpeechToSpeechRequest]
+    s2sStub --> s2sResp[SpeechToSpeechResponse]

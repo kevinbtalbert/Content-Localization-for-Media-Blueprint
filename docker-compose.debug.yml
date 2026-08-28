@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Opt-in debug override for the unified content-localization service.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml \
+#     --env-file configs/elevenlabs.env --env-file .env up
+
+services:
+  content-localization:
+    ports:
+      - 127.0.0.1:${CONTROLLER_DEBUG_PORT:-5678}:${CONTROLLER_DEBUG_PORT:-5678}
+    environment:
+      - CONTROLLER_VS_CODE_DEBUG=1

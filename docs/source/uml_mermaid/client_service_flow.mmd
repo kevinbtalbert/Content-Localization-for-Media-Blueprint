@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant CC as ControllerClient
+    participant CS as ControllerService
+    participant S2S as S2SService
+    participant ASD as ASDService
+    participant LS as LipSyncService
+
+    CC->>CS: check_service_health()
+    CS->>S2S: check_service_health()
+    CS->>ASD: check_service_health()
+    CS->>LS: check_service_health()
+
+    CC->>CS: StreamContentLocalization(requestIterator)
+    Note over CS: Controller starts background threads
+
+    CS->>S2S: StreamSpeechToSpeech(audioChunks)
+    S2S-->>CS: SpeechToSpeechResponse(s2sAudioData)
+
+    opt ASD enabled
+        CS->>ASD: StreamActiveSpeakerDetection(videoChunks,audioChunks,diarizationData)
+        ASD-->>CS: SpeakerDetectionResponse(speakerInfoData)
+    end
+
+    CS->>LS: AnimateRequest(videoData,s2sAudioData,speakerInfoData)
+    LS-->>CS: AnimateResponse(videoFileData)
+    CS-->>CC: ContentLocalizationResponse(videoFileData)

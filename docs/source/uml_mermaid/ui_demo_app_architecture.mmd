@@ -1,0 +1,19 @@
+flowchart LR
+    user[User] --> webUi[WebInterface]
+    webUi --> upload[VideoUpload]
+    webUi --> wsClient[WebSocketClient]
+
+    subgraph uiServer [UIServer]
+        nextServer[NextJsServer]
+        wsServer[WebSocketServer]
+        grpcClient[GrpcClient]
+    end
+
+    wsClient <--> wsServer
+    webUi --> nextServer
+    nextServer --> wsServer
+    nextServer --> grpcClient
+
+    grpcClient --> controller[ControllerService]
+    controller --> grpcClient
+    wsServer --> wsClient

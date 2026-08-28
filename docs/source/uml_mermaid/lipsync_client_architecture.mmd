@@ -1,0 +1,15 @@
+flowchart LR
+    lipApp[LipSyncApp] --> lipArgs[LipSyncArgsFactory]
+    lipApp --> videoSource[VideoSourceSimulator]
+    lipApp --> videoSink[VideoSinkSimulator]
+    lipApp --> audioReader[AudioFileReader]
+    lipApp --> speakerInfoReader[SpeakerInfoFileReader]
+    lipApp --> lipStub[LipSyncServiceStub]
+
+    lipStub --> lipService[LipSyncService]
+    lipStub --> animateReq[AnimateRequest]
+    lipStub --> animateResp[AnimateResponse]
+    animateReq --> animateConfig[AnimateConfig]
+    animateReq --> animateInput[AnimateInputData]
+    animateInput --> speakerInfo[SpeakerInfo]
+    speakerInfo --> rect[Rectangle]

@@ -1,0 +1,42 @@
+sequenceDiagram
+    participant Client
+    participant Servicer as ControllerServiceServicer
+    participant Service as ControllerService
+    participant Deserializer as ContentLocalizationDeserializer
+    participant S2S as S2SService
+    participant ASD as ASDService
+    participant LipSync as LipSyncService
+
+    Client->>Servicer: StreamContentLocalization(requestStream)
+    Servicer->>Service: infer(requestIterator, context, requestId)
+    Service->>Service: _create_services()
+    Service->>Service: _check_services_health()
+    Service->>Deserializer: start(requestIterator)
+    opt S2S enabled (no bypass)
+        Service->>Service: start S2S client thread
+    end
+    opt ASD enabled
+        Service->>Service: start ASD client thread
+    end
+    Service->>Service: start LipSync client thread
+
+    opt S2S enabled (no bypass)
+        Deserializer->>S2S: stream audio requests
+        S2S-->>Service: SpeechToSpeechResponse stream
+    end
+    opt S2S bypassed
+        Note over Deserializer,LipSync: translated audio → LipSync directly
+    end
+    opt ASD enabled
+        Deserializer->>ASD: stream video + audio + diarization requests
+        ASD-->>Service: SpeakerDetectionResponse stream
+    end
+
+    Service->>LipSync: stream LipsyncRequest from merged adapters
+    loop For each LipSync response
+        LipSync-->>Service: LipsyncResponse(video or keepalive)
+        Service-->>Servicer: ContentLocalizationResponse(video)
+    end
+    Servicer-->>Client: stream responses
+    Service->>Deserializer: stop()
+    Service->>Service: join client threads

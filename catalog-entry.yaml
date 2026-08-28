@@ -1,0 +1,18 @@
+name: Content Localization for Media
+entries:
+  - title: Content Localization for Media on Cloudera AI
+    label: content-localization-cai
+    short_description: |
+      End-to-end deployment of NVIDIA's Content Localization Blueprint on
+      Cloudera AI Workbench with local NIM inference via Ray, S2S dubbing,
+      and a Next.js demo UI.
+    tags:
+      - Content Localization
+      - NVIDIA NIM
+      - Ray
+      - GPU
+      - Media
+    git_url: "https://github.com/kevinbtalbert/Content-Localization-for-Media-Blueprint.git"
+    is_prototype: true
+    is_community: true
+    is_new: true

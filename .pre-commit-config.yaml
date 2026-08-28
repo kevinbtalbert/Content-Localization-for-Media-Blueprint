@@ -1,0 +1,126 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+exclude: |
+  (?x)^(
+      .*\{\{.*\}\}.*|     # Exclude any files with cookiecutter variables
+      docs/site/.*|       # Exclude mkdocs compiled files
+      \.history/.*|       # Exclude history files
+      .*cache.*/.*|       # Exclude cache directories
+      .*venv.*/.*|        # Exclude virtual environment directories
+  )$
+fail_fast: true
+default_language_version:
+  python: python3
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+repos:
+# ----------------------------- 🔒 Security Tools ---------------------------- #
+
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.28.0
+  hooks:
+    - id: gitleaks
+      name: "🔒 security · Detect hardcoded secrets"
+
+# --------------------------- 🔍 Code Quality Tools -------------------------- #
+
+# Codespell for common misspellings
+- repo: https://github.com/codespell-project/codespell
+  rev: v2.4.1
+  hooks:
+  - id: codespell
+    name: "🐍 Spell Checker (src and tests)"
+    files: ^(src|tests)/ # Only src and tests directories
+    args: [ "-w","--ignore-words", ".codespellignore" ] # write suggestions from codespell
+    stages: [ pre-commit ]
+
+# Ruff for linting and formatting
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.14.2
+  hooks:
+  # linter
+  - id: ruff
+    name: "🐍 Linting"
+    types_or: [ python, pyi ]
+    args: [ "--select", "I", "--fix" ] # Automatically fix issues and sort imports
+    stages: [ pre-commit ]
+  # formatter
+  - id: ruff-format
+    name: "🐍 Formatting"
+    types_or: [ python, pyi ]
+    stages: [ pre-commit ]
+
+# Pyright for type checking (better than mypy)
+# - repo: https://github.com/RobertCraigie/pyright-python
+#   rev: v1.1.391
+#   hooks:
+#     - id: pyright
+#       name: "🐍 python · Check types"
+
+# Validate pyproject.toml
+- repo: https://github.com/abravalheri/validate-pyproject
+  rev: v0.24.1
+  hooks:
+    - id: validate-pyproject
+      name: "🐍 python · Validate pyproject.toml"
+      additional_dependencies: ["validate-pyproject-schema-store[all]"]
+
+# Javascript quality tools
+# - repo: https://github.com/pre-commit/mirrors-prettier
+#   rev: v3.1.0
+#   hooks:
+#   - id: prettier
+#     name: "✨ UI · Formatting"
+#     entry: bash -c "npx --prefix client/demos run format"
+#     language: node
+#     types: [javascript]
+#     stages: [pre-commit]
+#     always_run: true
+#     verbose: false
+#     require_serial: true
+#     fail_fast: false
+
+# - repo: https://github.com/pre-commit/mirrors-eslint
+#   rev: v9.38.0
+#   hooks:
+#   - id: eslint
+#     name: "✨ UI · Linting"
+#     entry: bash -c "npx --prefix client/demos run lint"
+#     language: node
+#     stages: [pre-commit]
+#     always_run: true
+#     verbose: false
+#     require_serial: true
+#     fail_fast: false
+
+# ---------------------------------------------------------------------------- #
+#                             🧪 Fast Tests (Local)                            #
+# ---------------------------------------------------------------------------- #
+
+# Pytest for running tests
+- repo: local
+  hooks:
+  - id: pytest
+    name: "🐍 python · pytest"
+    entry: ./.venv/bin/pytest
+    language: system
+    types: [python]
+    pass_filenames: false
+    args: [
+      "tests",
+      "-v",
+      "--strict-markers",
+      "--cov=src",
+      "--cov=client",
+      "--cov-report=html:build/coverage",
+      "--cov-report=term-missing",
+    ]
+    stages: [pre-commit]
+    always_run: true
+    verbose: false
+    require_serial: true
+    fail_fast: false
+

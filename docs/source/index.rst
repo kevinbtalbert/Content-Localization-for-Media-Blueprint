@@ -1,0 +1,118 @@
+.. Content Localization Blueprint documentation
+
+Content Localization Blueprint
+===============================
+
+The Content Localization Blueprint is a production-ready
+solution for translating and dubbing audio and video content
+with AI. It adopts a microservices architecture that
+orchestrates Speech-to-Speech (S2S), Active Speaker Detection
+(ASD), and LipSync services, while offering multiple client
+types and a multi-threaded controller pipeline for real-time
+deployments.
+
+.. mermaid::
+
+   flowchart TB
+       subgraph clients [Client Layer]
+           controllerClient[Controller Client]
+           directClient[Direct Client]
+           individualClients[Individual Clients]
+       end
+
+       subgraph controllerLayer [Controller Service]
+           controllerService[ControllerService]
+           deserializer[ContentLocalizationDeserializer]
+           audioBuffer[audio_buffer]
+           videoBuffer[video_buffer]
+           diarizationBuffer[diarization_buffer]
+           bgAudioBuffer[background_audio_buffer]
+           translatedAudioBuffer[translated_audio_buffer]
+           controllerConfigBuffer[controller_config_buffer]
+           s2sThread[S2S Client Thread]
+           asdThread[ASD Client Thread]
+           lipsyncThread[LipSync Client Thread]
+       end
+
+       subgraph aiServices [AI Services]
+           s2sService[Speech-to-Speech Service]
+           asdService[Active Speaker Detection NIM]
+           lipService[LipSync NIM]
+       end
+
+       subgraph s2sBackends [S2S Backends]
+           elevenLabs[ElevenLabs Dubbing API]
+           cambAi[CambAI Dubbing API]
+       end
+
+       controllerClient --> controllerService
+       directClient --> s2sService
+       directClient --> asdService
+       directClient --> lipService
+       individualClients --> s2sService
+       individualClients --> asdService
+       individualClients --> lipService
+
+       controllerService --> deserializer
+       deserializer --> audioBuffer
+       deserializer --> videoBuffer
+       deserializer --> diarizationBuffer
+       deserializer --> bgAudioBuffer
+       deserializer --> translatedAudioBuffer
+       deserializer --> controllerConfigBuffer
+
+       audioBuffer -.-> s2sThread
+       s2sThread -.-> s2sService
+
+       audioBuffer --> asdThread
+       videoBuffer --> asdThread
+       diarizationBuffer --> asdThread
+       asdThread --> asdService
+
+       videoBuffer --> lipsyncThread
+       s2sService -.-> lipsyncThread
+       asdService --> lipsyncThread
+       bgAudioBuffer --> lipsyncThread
+       translatedAudioBuffer --> lipsyncThread
+       lipsyncThread --> lipService
+
+       lipService --> controllerService
+
+       s2sService --> elevenLabs
+       s2sService --> cambAi
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents
+   :hidden:
+
+   overview
+   architecture
+   client_types
+   setup
+   deployment
+   configuration
+   client
+   client_quickstart
+   cli_reference
+   diarization_formats
+   client_troubleshooting
+   demo_app
+   testing
+   utilities
+   logging
+   benchmarking
+   batch_processing
+
+
+Service Documentation
+---------------------
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Service Documentation
+
+   s2s_service
+   controller_service
+   common
+   api/index

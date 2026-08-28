@@ -1,0 +1,64 @@
+name: Build and Publish Docs
+
+on:
+  push:
+    branches:
+      - "**"           # build docs on every branch push
+  pull_request:         # build docs for PR validation
+  workflow_dispatch:    # allow manual run
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install grpcio-tools==1.67.1 protobuf==5.29.6
+          pip install ".[docs]" matplotlib
+
+      - name: Build Sphinx documentation
+        env:
+          PYTHONPATH: ${{ github.workspace }}/protos/generated
+        run: bash docs/build_docs.sh
+
+      - name: Prepare Pages artifact content
+        run: |
+          mkdir -p public
+          cp -r build/docs/html/. public/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy-pages:
+    needs: build-doc
+    if: github.ref_name == github.event.repository.default_branch && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

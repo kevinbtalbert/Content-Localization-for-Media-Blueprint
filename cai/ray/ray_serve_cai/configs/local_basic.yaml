@@ -1,0 +1,51 @@
+# Basic CAI Ray Cluster Configuration
+# Single-node deployment with minimal resources for quick testing and development.
+# Resources are kept small — head node only, no separate workers.
+#
+# All resource values are picked up by load_config() in
+# cai_integration/launch_ray_cluster.py.  Environment variables override
+# anything set here (RAY_HEAD_CPU, RAY_WORKER_GPUS, etc.).
+
+ray_cluster:
+
+  # ── Cluster topology ──────────────────────────────────────────────────────
+  num_workers: 0   # head-only deployment
+
+  # ── Head node resources ───────────────────────────────────────────────────
+  # The head node runs Ray GCS, the Ray Dashboard, the Management API, and
+  # nginx.  It is CPU-only — GPUs are reserved for worker nodes.
+  head_cpu:    4
+  head_memory: 8    # GB
+
+  # ── Management API resources (Ray Serve deployment on the head node) ──────
+  # Omitted here — defaults to head_cpu // 2 and head_memory // 2.
+  # management_api_cpu:    2
+  # management_api_memory: 4
+
+  # ── Worker node resources ─────────────────────────────────────────────────
+  # No workers in this config; values are ignored when num_workers is 0.
+  worker_cpu:    4
+  worker_memory: 8    # GB
+  worker_gpus:   0    # CPU-only
+
+  # ── Ray daemon ports ──────────────────────────────────────────────────────
+  ray_port:       6379
+  dashboard_port: 8265
+
+# ── CAI / CML Application configuration ──────────────────────────────────────
+cai:
+  # CPU-only standard runtime (no CUDA needed for a basic deployment).
+  runtime_identifier: "docker.repository.cloudera.com/cloudera/cdsw/ml-runtime-pbj-jupyterlab-python3.11-standard:2026.01.1-b6"
+
+  project_name: "ray-cluster"
+
+# ── Ray Serve proxy tuning ────────────────────────────────────────────────────
+# Omit a key to keep Ray's built-in default.
+ray_serve:
+  # proxy_health_check_period_s: 10.0
+  # proxy_health_check_timeout_s: 10.0
+  # proxy_ready_check_timeout_s: 5.0
+  # proxy_min_draining_period_s: 30.0
+
+# ── Optional per-job environment variables ────────────────────────────────────
+environment: {}

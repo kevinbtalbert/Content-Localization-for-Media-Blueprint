@@ -1,0 +1,36 @@
+flowchart TB
+    requestStream[ContentLocalizationRequest stream] --> deserializer[ContentLocalizationDeserializer]
+    deserializer --> audioBuffer[audio_buffer]
+    deserializer --> videoBuffer[video_buffer]
+    deserializer --> diarizationBuffer[diarization_buffer]
+    deserializer --> bgAudioBuffer[background_audio_buffer]
+    deserializer --> translatedAudioBuffer[translated_audio_buffer]
+    deserializer --> controllerConfigBuffer[controller_config_buffer]
+
+    audioBuffer -.-> s2sReq[to_s2s_request optional]
+    s2sReq --> s2sService[S2SService]
+    s2sService --> s2sResp[s2s_output_buffer]
+    s2sResp --> audioAdapter[s2s_audio_to_lipsync_audio]
+
+    videoBuffer --> asdVideoReq[to_asd_video_data]
+    audioBuffer --> asdAudioReq[to_asd_audio_data]
+    diarizationBuffer --> asdDiarizationReq[to_asd_diarization_data]
+    asdVideoReq --> asdRequestGen[asd_request_generator]
+    asdAudioReq --> asdRequestGen
+    asdDiarizationReq --> asdRequestGen
+    asdRequestGen --> asdService[ASDService optional]
+    asdService --> asdResp[asd_output_buffer]
+    asdResp --> roiAdapter[asd_response_to_lipsync_speaker_info]
+
+    videoBuffer --> videoAdapter[to_lipsync_video]
+    bgAudioBuffer --> bgAudioAdapter[to_lipsync_background_audio]
+    translatedAudioBuffer --> translatedAdapter[translated_audio_to_lipsync_audio]
+    videoAdapter --> lipsyncGen[lipsync_request_generator]
+    audioAdapter --> lipsyncGen
+    roiAdapter --> lipsyncGen
+    bgAudioAdapter --> lipsyncGen
+    translatedAdapter --> lipsyncGen
+
+    lipsyncGen --> lipsyncService[LipSyncService]
+    lipsyncService --> lipsyncResp[lipsync_output_buffer]
+    lipsyncResp --> response[ContentLocalizationResponse stream]

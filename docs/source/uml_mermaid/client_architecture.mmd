@@ -1,0 +1,54 @@
+flowchart LR
+    subgraph controllerClient [ControllerClient]
+        controllerApp[ControllerApp]
+        controllerArgs[ControllerArgsFactory]
+    end
+
+    subgraph directClient [DirectClient]
+        directApp[DirectApp]
+        directArgs[DirectArgsFactory]
+    end
+
+    subgraph individualClients [IndividualClients]
+        s2sApp[S2SApp]
+        lipsyncApp[LipSyncApp]
+        asdApp[ASDApp]
+    end
+
+    subgraph simulators [Simulators]
+        audioSource[AudioSourceSimulator]
+        videoSource[VideoSourceSimulator]
+        audioSink[AudioSinkSimulator]
+        videoSink[VideoSinkSimulator]
+    end
+
+    subgraph stubs [GrpcStubs]
+        controllerStub[ContentLocalizationControllerStub]
+        s2sStub[SpeechToSpeechStub]
+        asdStub[SpeakerDetectionStub]
+        lipStub[LipSyncServiceStub]
+    end
+
+    controllerApp --> controllerArgs
+    controllerApp --> audioSource
+    controllerApp --> videoSource
+    controllerApp --> controllerStub
+
+    directApp --> directArgs
+    directApp --> audioSource
+    directApp --> videoSource
+    directApp --> s2sStub
+    directApp --> asdStub
+    directApp --> lipStub
+
+    s2sApp --> audioSource
+    s2sApp --> s2sStub
+    lipsyncApp --> videoSource
+    lipsyncApp --> lipStub
+    asdApp --> videoSource
+    asdApp --> asdStub
+
+    controllerStub --> controllerSvc[ControllerService]
+    s2sStub --> s2sSvc[S2SService]
+    asdStub --> asdSvc[ASDService]
+    lipStub --> lipSvc[LipSyncService]

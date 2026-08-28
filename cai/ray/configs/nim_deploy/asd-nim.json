@@ -1,0 +1,17 @@
+{
+  "name": "asd-nim",
+  "engine_type": "nim",
+  "route_prefix": "/asd-nim",
+  "num_replicas": 1,
+  "engine_config": {
+    "nim_image": "nvcr.io/nim/nvidia/active-speaker-detection:1.1.0",
+    "nim_type": "asd",
+    "grpc_port": 50055,
+    "http_port": 8005,
+    "node_type": "nim-gpu-worker",
+    "num_gpus": 1,
+    "num_cpus": 4,
+    "model_cache_dir": "/home/cdsw/volumes/models/asd",
+    "max_concurrency_per_gpu": 1
+  }
+}

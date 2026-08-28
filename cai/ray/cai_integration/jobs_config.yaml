@@ -1,0 +1,31 @@
+# Ray Cluster Deployment Jobs — Content Localization on CAI
+#
+#   setup_base_env → setup_nim_env → launch_ray_cluster
+
+jobs:
+  setup_base_env:
+    name: "Setup Base Ray Environment"
+    script: "cai/ray/cai_integration/setup_environment.py"
+    parent_job_key: null
+    timeout: 900
+    cpu: 4
+    memory: 16
+    description: "Create /home/cdsw/.venv with Ray and core deps"
+
+  setup_nim_env:
+    name: "Setup NIM Engine Environment"
+    script: "cai/ray/cai_integration/setup_nim_env.py"
+    parent_job_key: "setup_base_env"
+    timeout: 600
+    cpu: 2
+    memory: 8
+    description: "Create /home/cdsw/.venv-nim for NIM Ray actors"
+
+  launch_ray_cluster:
+    name: "Launch Ray Cluster"
+    script: "cai/ray/cai_integration/launch_ray_cluster_job.py"
+    parent_job_key: "setup_nim_env"
+    timeout: 1200
+    cpu: 2
+    memory: 8
+    description: "Start Ray cluster head and GPU worker nodes"

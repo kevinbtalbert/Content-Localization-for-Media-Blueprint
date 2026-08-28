@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant User
+    participant GitHub
+    participant Docker
+    participant Compose as DockerCompose
+    participant Services
+
+    User->>GitHub: git clone repository
+    GitHub-->>User: source code
+    User->>Docker: docker login nvcr.io
+    Docker-->>User: login success
+    User->>Compose: docker compose up --build
+    Compose->>Services: build and start containers
+    Services-->>Compose: health ready
+    Compose-->>User: stack ready
+    User->>Services: run client requests

@@ -1,0 +1,30 @@
+flowchart LR
+    app[DirectApp] --> args[ArgsFactory]
+    app --> orchestration[ServiceOrchestration]
+    app --> monitoring[PerformanceMonitoring]
+    app --> audioSource[AudioSourceSimulator]
+    app --> videoSource[VideoSourceSimulator]
+    app --> audioSink[AudioSinkSimulator]
+    app --> videoSink[VideoSinkSimulator]
+
+    app --> s2sConn[S2SConnection]
+    app --> asdConn[ASDConnection]
+    app --> lipConn[LipSyncConnection]
+
+    s2sConn --> s2sService[S2SService]
+    asdConn --> asdService[ASDService]
+    lipConn --> lipService[LipSyncService]
+
+    s2sService --> elevenLabs[ElevenLabs]
+    s2sService --> cambAi[CambAI]
+
+    audioSource --> s2sService
+    videoSource --> asdService
+    s2sService --> lipService
+    asdService --> lipService
+    videoSource --> lipService
+    lipService --> videoSink
+
+    monitoring --> s2sConn
+    monitoring --> asdConn
+    monitoring --> lipConn

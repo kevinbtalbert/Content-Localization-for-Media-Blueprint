@@ -1,0 +1,32 @@
+flowchart TB
+    controller[ControllerService._controller_impl] --> deserializer[Deserializer thread]
+    controller --> s2sThread[S2S client thread optional]
+    controller --> asdThread[ASD client thread optional]
+    controller --> lipThread[LipSync client thread]
+    controller --> mainThread[Main response thread]
+
+    deserializer --> audioBuffer[audio_buffer]
+    deserializer --> videoBuffer[video_buffer]
+    deserializer --> diarizationBuffer[diarization_buffer]
+    deserializer --> bgAudioBuffer[background_audio_buffer]
+    deserializer --> translatedAudioBuffer[translated_audio_buffer]
+    deserializer --> controllerConfigBuffer[controller_config_buffer]
+
+    audioBuffer -.-> s2sThread
+    s2sThread --> s2sOut[s2s_output_buffer]
+
+    videoBuffer --> asdThread
+    audioBuffer --> asdThread
+    diarizationBuffer --> asdThread
+    asdThread --> asdOut[asd_output_buffer]
+
+    videoBuffer --> reqGen[lipsync_request_generator]
+    s2sOut --> reqGen
+    asdOut --> reqGen
+    translatedAudioBuffer --> reqGen
+    bgAudioBuffer --> reqGen
+    reqGen --> lipThread
+
+    lipThread --> lipsyncOut[lipsync_output_buffer]
+    lipsyncOut --> mainThread
+    mainThread --> response[ContentLocalizationResponse]

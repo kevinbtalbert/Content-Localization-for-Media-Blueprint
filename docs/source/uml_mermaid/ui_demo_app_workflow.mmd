@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant User
+    participant Browser
+    participant UI as UiService
+    participant Controller
+
+    User->>Browser: Open demo app
+    Browser->>UI: Request frontend
+    UI-->>Browser: Serve UI
+    User->>Browser: Upload video
+    Browser->>UI: Open WebSocket and send chunks
+    UI->>Controller: StreamContentLocalization()
+    Controller-->>UI: Stream output chunks
+    UI-->>Browser: Stream output chunks
+    Browser-->>User: Preview and download result
+    Browser->>UI: Close WebSocket

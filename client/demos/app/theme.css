@@ -1,0 +1,88 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* Static Theme Properties*/
+@theme {
+  --color-blue-300: #10b1fb;
+  --color-blue-400: #008af9;
+  --color-blue-500: #0074df;
+  --color-blue-700: #0046a4;
+  --color-blue-900: #002050;
+  --color-blue-950: #00112c;
+  --color-brand: #76b900;
+  --color-gray-000: #ffffff;
+  --color-gray-050: #eeeeee;
+  --color-gray-100: #e0e0e0;
+  --color-gray-1000: #000000;
+  --color-gray-300: #a7a7a7;
+  --color-gray-400: #898989;
+  --color-gray-600: #636363;
+  --color-gray-800: #313131;
+  --color-gray-850: #181818;
+  --color-gray-900: #222222;
+  --color-gray-950: #161616;
+  --color-gray-975: #0c0c0c;
+  --color-green-200: #a5de15;
+  --color-green-300: #76b900;
+  --color-green-400: #549a00;
+  --color-green-500: #3f8500;
+  --color-green-600: #327100;
+  --color-green-700: #265600;
+  --color-green-800: #193800;
+  --color-green-900: #142700;
+  --color-red-300: #ff8181;
+  --color-red-500: #e52020;
+  --color-red-600: #c21e1e;
+  --color-red-900: #4b0404;
+  --color-translucent-black-120: #0000001f;
+  --color-translucent-black-150: #00000026;
+  --color-translucent-black-400: #00000066;
+  --color-translucent-black-600: #00000099;
+  --color-translucent-black-700: #000000b2;
+  --color-translucent-white-000: #ffffff00;
+  --color-translucent-white-050: #ffffff0d;
+  --color-translucent-white-100: #ffffff1a;
+  --color-translucent-white-120: #ffffff1f;
+  --color-translucent-white-200: #ffffff33;
+  --color-translucent-white-300: #ffffff4d;
+  --color-translucent-white-400: #ffffff66;
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono:
+    JetBrains Mono, JetBrains Mono Fallback, ui-monospace, monospace, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --radius-lg: 8px;
+  --shadow-lg: 0px 8px 12px 0px var(--color-translucent-black-150);
+}
+
+/* Themed Properties - Only used properties */
+@theme {
+  --color-accent-white-foreground: var(--color-gray-000);
+  --color-base-border: var(--color-gray-800);
+  --color-brand-border: var(--color-brand);
+  --color-brand-foreground: var(--color-brand);
+  --color-feedback-danger-background: var(--color-red-950);
+  --color-feedback-danger-border: var(--color-red-400);
+  --color-feedback-danger-foreground: var(--color-red-300);
+
+  --color-feedback-info-background: var(--color-blue-950);
+  --color-feedback-info-border: var(--color-blue-400);
+  --color-feedback-info-foreground: var(--color-blue-300);
+
+  --color-feedback-warning-background: var(--color-yellow-950);
+  --color-feedback-warning-border: var(--color-yellow-400);
+  --color-feedback-warning-foreground: var(--color-yellow-300);
+
+  --color-feedback-success-foreground: var(--color-green-400);
+  --color-interaction-base-border: var(--color-gray-400);
+  --color-interaction-hover-background: var(--color-translucent-white-120);
+  --color-interaction-primary-base-background: var(--color-green-300);
+  --color-interaction-primary-hover-background: var(--color-green-200);
+  --color-primary-foreground: var(--color-gray-050);
+  --color-secondary-foreground: var(--color-gray-100);
+  --color-subtle-foreground: var(--color-gray-400);
+  --color-surface-base-background: var(--color-gray-975);
+  --color-surface-overlay-background: var(--color-gray-900);
+}

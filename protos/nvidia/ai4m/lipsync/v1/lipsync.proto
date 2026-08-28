@@ -1,0 +1,173 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+syntax = "proto3";
+
+package nvidia.ai4m.lipsync.v1;
+
+import "google/protobuf/empty.proto";
+import "nvidia/ai4m/audio/v1/audio.proto";
+import "nvidia/ai4m/common/v1/common.proto";
+import "nvidia/ai4m/video/v1/video.proto";
+
+// LipSyncService provides APIs for lip sync animation
+//
+// The service takes input video and audio files and generates an output video
+// with synchronized lip movements matching the audio.
+//
+// The Lipsync API supports both transactional and streaming processing
+// through gRPC.
+//
+// The service supports:
+// Extending audio with silence when video is longer (only for transactional)
+// Looping video when audio is longer (only for transactional)
+// Configurable output video encoding
+
+service LipSyncService {
+  // Lipsync is a bidirectional streaming RPC that takes video and audio
+  // input and returns a lip synchronized video output.
+  // request: Stream of LipsyncRequest messages containing
+  // either configuration or input data
+  // response: Stream of LipsyncResponse messages containing either
+  // configuration, video data, or keepalive
+  rpc Lipsync(stream LipsyncRequest)
+      returns (stream LipsyncResponse) {}
+}
+
+// ExtendAudio defines how to handle cases where video duration
+// exceeds audio duration
+enum ExtendAudio {
+  // Default behavior, no audio extension
+  EXTEND_AUDIO_UNSPECIFIED = 0;
+  // Extend audio with silence to match video length
+  EXTEND_AUDIO_SILENCE = 1;
+}
+
+// ExtendVideo defines how to handle cases where audio duration
+// exceeds video duration
+enum ExtendVideo {
+  // Default behavior, no video extension
+  EXTEND_VIDEO_UNSPECIFIED = 0;
+  // Loop video forward to match audio length
+  EXTEND_VIDEO_FORWARD = 1;
+  // Loop video in reverse to match audio length
+  EXTEND_VIDEO_REVERSE = 2;
+}
+
+
+// Background Audio config
+message BackgroundAudioConfig{
+  // Indicates whether background audio is provided for mixing.
+  // If true, background audio will be mixed with the output
+  // to preserve ambient sounds.
+  // If false or unset, only the main audio will be used.
+  optional bool is_background_audio_provided = 1;
+  // Background audio's codec
+  optional nvidia.ai4m.audio.v1.AudioCodec audio_codec = 2;
+  // Background audio volume to be used for mixing.
+  // 0: Background audio is not included.
+  // 1: Background audio is included at its full, original volume.
+  // (0, 1): Background volume is reduced (a value between 0 and 1).
+  optional float audio_volume = 3;
+}
+
+
+// LipsyncConfig contains configuration parameters for the
+// lip sync animation
+message LipsyncConfig {
+  // Codec of the input audio (wav or mp3)
+  nvidia.ai4m.audio.v1.AudioCodec input_audio_codec = 1;
+  // Indicates whether speaker information is provided by the user
+  // If true, the user provides speaker bounding boxes and metadata
+  // If false or unset, the system will auto-detect faces
+  optional bool is_speaker_info_provided = 2;
+  // How to handle longer video than audio
+  optional ExtendAudio extend_audio = 3;
+  // How to handle longer audio than video
+  optional ExtendVideo extend_video = 4;
+  // Output video encoding parameters
+  optional nvidia.ai4m.video.v1.VideoEncoding output_video_encoding = 5;
+  // Output video's audio codec
+  optional nvidia.ai4m.audio.v1.AudioCodec output_audio_codec = 6;
+  // Speed of head movement in input video
+  // 0 for static/slow-moving head, 1 for fast-moving head
+  optional uint32 head_movement_speed = 7;
+  // Background audio config
+  optional BackgroundAudioConfig background_audio_config = 8;
+}
+
+// SpeakerInfo contains metadata for tracking and processing
+// a speaker's face region in video frames.
+message SpeakerInfo {
+  // Bounding box coordinates defining the rectangular region
+  // containing the speaker's face
+  nvidia.ai4m.common.v1.BoundingBox speaker_bbox = 1;
+  // Unique identifier for this speaker across frames
+  optional int32 speaker_id = 2;
+  // Flag indicating whether the speaker is currently speaking
+  optional bool is_speaking = 3;
+}
+
+// SpeakerInfoPerFrame contains all speaker face information
+// for a single video frame. Enables targeted lip sync
+// processing for one or multiple speakers per frame.
+message SpeakerInfoPerFrame {
+
+  // Frame Index
+  uint32 frame_id = 1;
+
+  // List of all speakers detected or provided in this frame
+  // Can include multiple speakers for multi-speaker scenarios
+  // Each entry contains a bounding box and metadata (speaker_id, is_speaking)
+  repeated SpeakerInfo speaker_infos = 2;
+
+  // Bypass lipsync for this frame.
+  // If true, lipsync will be bypassed for this video frame.
+  // If false or unset, this video frame will be lipsynced.
+  optional bool bypass = 3;
+  
+}
+
+// LipsyncInputData contains the video, audio, and optional
+// speaker face information for lip sync processing.
+message LipsyncInputData {
+  // Input video file data as bytes (e.g., MP4 file contents)
+  optional bytes video_file_data = 1;
+
+  // Input audio file data as bytes (e.g., WAV or MP3 file contents)
+  optional bytes audio_file_data = 2;
+
+  // Speaker face regions for each video frame (optional)
+  // Send one SpeakerInfoPerFrame per video frame, ordered by frame number
+  // Leave empty to enable automatic face detection for all frames
+  repeated SpeakerInfoPerFrame per_frame_speaker_infos = 3;
+
+  // Bytes of the background audio file
+  optional bytes background_audio_file_data = 4;
+}
+
+// LipsyncRequest is a union type that can contain either
+// configuration or input data
+message LipsyncRequest {
+  oneof lipsync_request {
+    // Configuration parameters for Lipsync
+    LipsyncConfig config = 1;
+    // Input video and audio data to process
+    LipsyncInputData input = 2;
+  }
+}
+
+// LipsyncResponse is a union type that can contain
+// configuration, video data, or keepalive
+message LipsyncResponse {
+  oneof lipsync_response {
+    // Echoed configuration parameters
+    LipsyncConfig config = 1;
+    // Bytes of the output video file
+    bytes video_file_data = 2;
+    // Empty message used to maintain connection
+    google.protobuf.Empty keepalive = 3;
+  }
+}

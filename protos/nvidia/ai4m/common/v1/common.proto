@@ -1,0 +1,20 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+syntax = "proto3";
+
+package nvidia.ai4m.common.v1;
+
+// BoundingBox defines a rectangular region using a point and dimensions
+message BoundingBox {
+  // X coordinate of the top-left corner
+  float x = 1;
+  // Y coordinate of the top-left corner
+  float y = 2;
+  // Width of the BoundingBox
+  float width = 3;
+  // Height of the BoundingBox
+  float height = 4;
+}

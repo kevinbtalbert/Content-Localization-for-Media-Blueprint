@@ -1,0 +1,45 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+syntax = "proto3";
+
+package nvidia.ai4m.audio.v1;
+
+// Configuration which describes Audio properties
+message AudioConfig {
+  // The audio codec
+  AudioCodec encoding = 1;
+  // Audio format
+  optional AudioFormat format = 2;
+  // Bitrate in kbps
+  optional uint32 bitrate_kbps = 3;
+}
+
+// Enum representing supported audio codecs
+enum AudioCodec {
+  // Audio codec not specified
+  AUDIO_CODEC_UNSPECIFIED = 0;
+  // MP3 codec
+  AUDIO_CODEC_MP3 = 1;
+  // WAV codec
+  AUDIO_CODEC_WAV = 2;
+  // OPUS codec
+  AUDIO_CODEC_OPUS = 3;
+}
+
+// Enum representing supported audio formats
+enum AudioFormat {
+  AUDIO_FORMAT_UNSPECIFIED = 0;
+
+  // Signed formats (little-endian)
+  AUDIO_FORMAT_S16LE = 1;   // 16-bit signed
+}
+
+// AudioEncoding specifies parameters for encoding audio
+// Applicable to opus and mp3 only.
+message AudioEncoding {
+  // Bitrate in kbps
+  uint32 bitrate_kbps = 1;
+}

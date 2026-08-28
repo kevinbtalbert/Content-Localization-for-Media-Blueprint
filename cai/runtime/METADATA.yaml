@@ -1,0 +1,16 @@
+name: "Content Localization for Media"
+slug: "content-localization"
+launchable: true
+lifecycle_status: Active
+catalog_classification:
+  - Developer Example
+tags:
+  - content-localization
+  - nvidia-nim
+  - gpu
+  - ray
+product_mapping:
+  - Cloudera AI Workbench
+description: |
+  Unified Docker image for NVIDIA Content Localization on Cloudera AI Workbench.
+  Build from the repository root: docker build -t <registry>/content-localization:latest .

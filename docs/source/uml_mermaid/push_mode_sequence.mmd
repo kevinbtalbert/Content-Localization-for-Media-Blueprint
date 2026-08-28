@@ -1,0 +1,56 @@
+sequenceDiagram
+    participant C as Client
+    participant S as ControllerService
+    participant D as ContentLocalizationDeserializer
+    participant ST as S2S Client Thread
+    participant AT as ASD Client Thread
+    participant LT as LipSync Client Thread
+    participant S2S as S2SService
+    participant ASD as ASDService
+    participant L as LipSyncService
+
+    C->>S: StreamContentLocalization(requestIterator)
+    S->>D: start(requestIterator)
+    opt S2S enabled (no bypass)
+        S->>ST: start()
+    end
+    opt ASD enabled
+        S->>AT: start()
+    end
+    S->>LT: start()
+
+    loop Continuous processing
+        opt S2S enabled (no bypass)
+            D->>ST: audio_buffer requests
+            ST->>S2S: stream speech requests
+            S2S-->>ST: speech responses
+        end
+
+        opt S2S bypassed
+            Note over D,LT: translated_audio_buffer → LipSync directly
+        end
+
+        opt ASD enabled
+            D->>AT: video_buffer requests
+            D->>AT: audio_buffer requests
+            D->>AT: diarization_buffer requests
+            AT->>ASD: stream speaker requests
+            ASD-->>AT: speaker responses
+        end
+
+        D->>LT: video_buffer requests
+        ST->>LT: adapted audio stream (or translated audio)
+        AT->>LT: adapted speaker info stream
+        LT->>L: stream LipsyncRequest
+        L-->>S: LipsyncResponse
+        S-->>C: ContentLocalizationResponse
+    end
+
+    S->>D: stop()
+    opt S2S enabled (no bypass)
+        S->>ST: join()
+    end
+    opt ASD enabled
+        S->>AT: join()
+    end
+    S->>LT: join()

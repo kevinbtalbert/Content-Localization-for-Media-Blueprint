@@ -1,0 +1,37 @@
+# Ray Cluster Configuration — Content Localization on CAI
+
+ray_cluster:
+  head_cpu: 8
+  head_memory: 24
+  management_api_cpu: 4
+  management_api_memory: 12
+
+  worker_groups:
+    - name: nim-gpu-workers
+      node_type: nim-gpu-worker
+      count: 2
+      cpu: 8
+      memory: 64
+      gpus: 1
+      accelerator_type: L40S
+      node_label:
+        nvidia.com/gpu.product: "NVIDIA-L40S"
+
+  ray_port: 6379
+  dashboard_port: 8265
+
+cai:
+  head_runtime_identifier: "docker.repository.cloudera.com/cloudera/cdsw/ml-runtime-pbj-jupyterlab-python3.13-standard:2026.08.1-b5"
+  worker_runtime_identifier: "docker.repository.cloudera.com/cloudera/cdsw/ml-runtime-pbj-jupyterlab-python3.13-cuda:2026.08.1-b5"
+  project_name: "content-localization"
+  head_app_name: "content-localization-ray-head"
+
+ray_serve: {}
+
+monitoring:
+  prometheus_host: null
+  grafana_host: null
+  grafana_iframe_host: null
+  grafana_org_id: "1"
+
+environment: {}

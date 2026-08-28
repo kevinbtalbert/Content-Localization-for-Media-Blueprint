@@ -1,0 +1,198 @@
+"""
+Engine implementations for Ray Serve
+Supports multiple LLM engines (vLLM, SGLang, etc.)
+"""
+
+import logging
+
+# Import protocols and registry
+from .base import (
+    LLMEngineProtocol,
+    ConfigBuilderProtocol,
+    DeploymentFactoryProtocol,
+    EngineComponents,
+)
+from .registry import get_registry, register_engine, EngineRegistry
+
+logger = logging.getLogger(__name__)
+
+# Lazy imports for engine components - these are optional dependencies
+VLLMEngine = None
+create_vllm_deployment = None
+build_vllm_engine_config = None
+validate_vllm_config = None
+VLLMConfigBuilder = None
+VLLMDeploymentFactory = None
+
+# Try to import and register vLLM engine.
+# vLLM may not be installed on the head node (CPU-only image).  The config
+# builder and deployment factory in vllm_config.py do NOT import vllm at
+# module level — they defer to create_vllm_deployment() which is only called
+# on a worker node.  So we import only vllm_config here (lightweight) and
+# register a placeholder engine_class.
+try:
+    from .vllm_config import (
+        build_vllm_engine_config,
+        validate_vllm_config,
+        VLLMConfigBuilder,
+        VLLMDeploymentFactory,
+    )
+
+    # Try full import; fall back to a placeholder class if vllm is missing.
+    try:
+        from .vllm_engine import VLLMEngine, create_vllm_deployment
+    except Exception as _vllm_err:
+        logger.info("vLLM engine module not importable on this node (%s: %s) "
+                     "— registering with stub engine class",
+                     type(_vllm_err).__name__, _vllm_err)
+        VLLMEngine = type("VLLMEngine", (), {})            # placeholder
+        create_vllm_deployment = None
+
+    register_engine(
+        engine_type="vllm",
+        engine_class=VLLMEngine,
+        config_builder=VLLMConfigBuilder(),
+        deployment_factory=VLLMDeploymentFactory(),
+        set_as_default=True  # vLLM is the default engine
+    )
+    logger.info("✅ Registered vLLM engine as default")
+except Exception as e:
+    logger.warning("Failed to register vLLM engine (%s): %s", type(e).__name__, e)
+
+# Try to register SGLang engine (optional, fail gracefully)
+try:
+    from .sglang_config import SGLangConfigBuilder, SGLangDeploymentFactory
+
+    try:
+        from .sglang_engine import SGLangEngine
+    except Exception as _sg_err:
+        logger.info("SGLang engine module not importable (%s: %s) "
+                     "— registering with stub",
+                     type(_sg_err).__name__, _sg_err)
+        SGLangEngine = type("SGLangEngine", (), {})
+
+    register_engine(
+        engine_type="sglang",
+        engine_class=SGLangEngine,
+        config_builder=SGLangConfigBuilder(),
+        deployment_factory=SGLangDeploymentFactory(),
+        set_as_default=False
+    )
+    logger.info("✅ Registered SGLang engine")
+except Exception as e:
+    logger.warning("Failed to register SGLang engine (%s): %s", type(e).__name__, e)
+
+# Try to register YOLO engine (optional, fail gracefully)
+# Requires: ultralytics, Pillow
+try:
+    from .yolo_engine import YOLOEngine
+    from .yolo_config import YOLOConfigBuilder, YOLODeploymentFactory
+
+    register_engine(
+        engine_type="yolo",
+        engine_class=YOLOEngine,
+        config_builder=YOLOConfigBuilder(),
+        deployment_factory=YOLODeploymentFactory(),
+        set_as_default=False
+    )
+    logger.info("✅ Registered YOLO engine")
+except ImportError as e:
+    logger.debug(f"YOLO engine not available (optional dependency): {e}")
+except Exception as e:
+    logger.warning(f"Failed to register YOLO engine: {e}")
+
+# Try to register MCP engine (optional, fail gracefully)
+# Requires: mcp, httpx (for tools that make HTTP calls)
+try:
+    from .mcp_engine import MCPEngine
+    from .mcp_config import MCPConfigBuilder, MCPDeploymentFactory
+
+    register_engine(
+        engine_type="mcp",
+        engine_class=MCPEngine,
+        config_builder=MCPConfigBuilder(),
+        deployment_factory=MCPDeploymentFactory(),
+        set_as_default=False
+    )
+    logger.info("✅ Registered MCP engine")
+except ImportError as e:
+    logger.debug(f"MCP engine not available (optional dependency): {e}")
+except Exception as e:
+    logger.warning(f"Failed to register MCP engine: {e}")
+
+# Try to register LiteLLM engine (optional, fail gracefully)
+# Requires: litellm>=1.83.0, pyyaml (isolated in .venv-litellm)
+try:
+    from .litellm_config import LiteLLMConfigBuilder, LiteLLMDeploymentFactory
+
+    try:
+        from .litellm_engine import LiteLLMEngine
+    except Exception as _lt_err:
+        logger.info("LiteLLM engine module not importable (%s: %s) "
+                     "— registering with stub",
+                     type(_lt_err).__name__, _lt_err)
+        LiteLLMEngine = type("LiteLLMEngine", (), {})
+
+    register_engine(
+        engine_type="litellm",
+        engine_class=LiteLLMEngine,
+        config_builder=LiteLLMConfigBuilder(),
+        deployment_factory=LiteLLMDeploymentFactory(),
+        set_as_default=False
+    )
+    logger.info("✅ Registered LiteLLM engine")
+except Exception as e:
+    logger.warning("Failed to register LiteLLM engine (%s): %s", type(e).__name__, e)
+
+# Try to register NIM engine (Content Localization)
+try:
+    from .nim_engine.nim_config import NIMConfigBuilder, NIMDeploymentFactory
+
+    try:
+        from .nim_engine.nim_engine import NIMEngine
+    except Exception as _nim_err:
+        logger.info(
+            "NIM engine module not importable (%s: %s) — registering with stub",
+            type(_nim_err).__name__,
+            _nim_err,
+        )
+        NIMEngine = type("NIMEngine", (), {})
+
+    register_engine(
+        engine_type="nim",
+        engine_class=NIMEngine,
+        config_builder=NIMConfigBuilder(),
+        deployment_factory=NIMDeploymentFactory(),
+        set_as_default=False,
+    )
+    logger.info("✅ Registered NIM engine")
+except Exception as e:
+    logger.warning("Failed to register NIM engine (%s): %s", type(e).__name__, e)
+
+__all__ = [
+    # Legacy exports (backward compatibility)
+    'VLLMEngine',
+    'create_vllm_deployment',
+    'build_vllm_engine_config',
+    'validate_vllm_config',
+    # New protocol exports
+    'LLMEngineProtocol',
+    'ConfigBuilderProtocol',
+    'DeploymentFactoryProtocol',
+    'EngineComponents',
+    # Registry exports
+    'get_registry',
+    'register_engine',
+    'EngineRegistry',
+    # Class-based exports
+    'VLLMConfigBuilder',
+    'VLLMDeploymentFactory',
+    # YOLO engine exports
+    'YOLOEngine',
+    'YOLOConfigBuilder',
+    'YOLODeploymentFactory',
+    # MCP engine exports
+    'MCPEngine',
+    'MCPConfigBuilder',
+    'MCPDeploymentFactory',
+]

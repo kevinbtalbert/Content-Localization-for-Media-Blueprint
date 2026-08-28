@@ -1,0 +1,38 @@
+flowchart TB
+    subgraph clients [ClientLayer]
+        controllerClient[ControllerClient]
+        directClient[DirectClient]
+        individualClients[IndividualClients]
+    end
+
+    subgraph controllerLayer [ControllerServiceLayer]
+        controllerService[ControllerService]
+        requestProcessing[PushModeProcessing]
+    end
+
+    subgraph aiServices [AIServiceLayer]
+        s2sService[S2SService]
+        asdService[ASDService]
+        lipService[LipSyncService]
+    end
+
+    subgraph externalServices [ExternalServices]
+        elevenLabs[ElevenLabs]
+        cambAi[CambAI]
+    end
+
+    controllerClient --> controllerService
+    directClient --> s2sService
+    directClient --> asdService
+    directClient --> lipService
+    individualClients --> s2sService
+    individualClients --> asdService
+    individualClients --> lipService
+
+    controllerService --> requestProcessing
+    controllerService --> s2sService
+    controllerService --> asdService
+    controllerService --> lipService
+
+    s2sService --> elevenLabs
+    s2sService --> cambAi
