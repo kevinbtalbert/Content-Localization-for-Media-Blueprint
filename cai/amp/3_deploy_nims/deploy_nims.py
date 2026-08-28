@@ -10,10 +10,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
+from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 from cai.lib.cai_common import get_ray_head_url, wait_for_http  # noqa: E402
+from cai.lib.paths import PROJECT_ROOT  # noqa: E402
 
 CONFIG_DIR = PROJECT_ROOT / "cai" / "ray" / "configs" / "nim_deploy"
 
@@ -62,5 +63,4 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+run_amp_entry(main, __name__)

@@ -8,7 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
+sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
+
+from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
+from cai.lib.paths import PROJECT_ROOT  # noqa: E402
+
 DEMO_DIR = PROJECT_ROOT / "client" / "demos"
 
 
@@ -26,5 +30,4 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+run_amp_entry(main, __name__)

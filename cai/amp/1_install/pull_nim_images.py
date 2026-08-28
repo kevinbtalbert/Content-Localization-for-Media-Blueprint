@@ -8,9 +8,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
+from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 from cai.lib.paths import ensure_cai_dirs  # noqa: E402
 
 LIPSYNC_IMAGE = os.environ.get("LIPSYNC_IMAGE", "nvcr.io/nim/nvidia/lipsync:1.3.0")
@@ -42,5 +42,4 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+run_amp_entry(main, __name__)

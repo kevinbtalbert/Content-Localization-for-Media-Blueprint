@@ -10,8 +10,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+# CAI run_session kernels do not define __file__; use CDSW_PROJECT_DIR instead.
+sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
+from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 from cai.lib.paths import PROJECT_ROOT, RAY_ROOT  # noqa: E402
 
 
@@ -72,5 +74,4 @@ def main() -> int:
     return 1
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+run_amp_entry(main, __name__)

@@ -9,11 +9,11 @@ import sys
 import time
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
+from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 from cai.lib.cai_common import write_dotenv_file  # noqa: E402
-from cai.lib.paths import ENDPOINTS_ENV, NIM_ENDPOINTS_JSON  # noqa: E402
+from cai.lib.paths import ENDPOINTS_ENV, NIM_ENDPOINTS_JSON, PROJECT_ROOT  # noqa: E402
 from cai.lib.service_env import load_config_defaults  # noqa: E402
 
 S2S_ENDPOINT = PROJECT_ROOT / "cai" / "config" / "s2s_endpoint.json"
@@ -55,5 +55,4 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+run_amp_entry(main, __name__)

@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-RAY_ROOT = PROJECT_ROOT / "cai" / "ray"
+sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
+
+from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
+from cai.lib.paths import PROJECT_ROOT, RAY_ROOT  # noqa: E402
 
 
 def main() -> int:
@@ -27,5 +30,4 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+run_amp_entry(main, __name__)
