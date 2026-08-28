@@ -6,6 +6,7 @@ entries:
       End-to-end deployment of NVIDIA's Content Localization Blueprint on
       Cloudera AI Workbench with local NIM inference via Ray, S2S dubbing,
       and a Next.js demo UI.
+    image_path: "https://github.com/kevinbtalbert/Content-Localization-for-Media-Blueprint/blob/main/assets/AMP_thumbnail.png?raw=true"
     tags:
       - Content Localization
       - NVIDIA NIM
