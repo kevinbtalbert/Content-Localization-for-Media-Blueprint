@@ -4,36 +4,30 @@ description: |
   local NIM inference (ASD + LipSync) on a Ray GPU cluster, ElevenLabs/CambAI
   speech-to-speech dubbing, and the Next.js demo UI.
 author: Cloudera
-date: "2026-08-28"
 specification_version: 1.0
 prototype_version: 1.0
+date: "2026-08-27"
 
 environment_variables:
   NGC_API_KEY:
+    default: ""
     description: "NGC API key for pulling NVIDIA NIM container images from nvcr"
-    required: true
   S2S_SERVICE:
     default: "EL_DUBBING"
     description: "Speech-to-Speech backend: EL_DUBBING (ElevenLabs) or CAMB_DUBBING (CambAI)"
-    required: true
   ELEVENLABS_API_KEY:
     description: "ElevenLabs API key (required when S2S_SERVICE=EL_DUBBING)"
-    required: false
   CAMB_API_KEY:
     description: "CambAI API key (required when S2S_SERVICE=CAMB_DUBBING)"
-    required: false
   LIPSYNC_NIM_TAGS_SELECTOR:
     default: "language=de"
     description: "NIM_TAGS_SELECTOR for LipSync language model"
-    required: false
   S2S_DEFAULT_TARGET_LANGUAGE:
     default: "de"
     description: "Default target dubbing language"
-    required: false
   RAY_HEAD_APP_NAME:
     default: "content-localization-ray-head"
     description: "Ray cluster head application subdomain name"
-    required: false
 
 runtimes:
   - editor: JupyterLab
