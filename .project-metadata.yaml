@@ -10,7 +10,8 @@ prototype_version: 1.0
 
 environment_variables:
   NGC_API_KEY:
-    description: "NGC API key for pulling NVIDIA NIM container images from nvcr.io"
+    default: "required to download ai4m nims"
+    description: "NGC API key for pulling NVIDIA NIM container images from nvcr"
     required: true
   S2S_SERVICE:
     default: "EL_DUBBING"
@@ -39,7 +40,6 @@ runtimes:
   - editor: JupyterLab
     kernel: Python 3.13
     edition: Nvidia GPU
-    version: "2026.08"
 
 tasks:
   - type: run_session
