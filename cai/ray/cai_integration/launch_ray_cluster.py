@@ -56,7 +56,7 @@ sys.path.insert(0, str(script_dir.parent))
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from cai.lib.gpu_config import apply_gpu_env_to_worker_groups
+from cai.lib.gpu_config import configure_worker_groups_gpu
 from ray_serve_cai.cai_cluster import CAIClusterManager, WorkerGroupConfig
 
 # Jinja2 templates for generated launcher scripts
@@ -335,7 +335,7 @@ def load_config():
             _mon['grafana_iframe_host'] = _mon['grafana_host']
 
     if config.get('worker_groups'):
-        apply_gpu_env_to_worker_groups(config['worker_groups'])
+        configure_worker_groups_gpu(config['worker_groups'])
 
     return config
 

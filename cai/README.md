@@ -86,30 +86,22 @@ On a GPU session before full install:
 python cai/amp/0_spike/validate_cai_prerequisites.py
 ```
 
-Checks: Docker daemon, GPU visibility, `NGC_API_KEY`, Node.js, grpcurl.
+Checks: Docker daemon, GPU visibility, GPU profile detection (`cai/config/gpu_profile.json`), `NGC_API_KEY`, Node.js, grpcurl.
 
 ## Ray cluster configuration
 
-GPU worker SKU and count are set at **AMP install** via project environment variables (see [`.project-metadata.yaml`](../.project-metadata.yaml)):
+GPU worker SKU is **detected automatically** from `nvidia-smi` during the prerequisite validation session (which runs on a GPU) and saved to `cai/config/gpu_profile.json`. The Ray cluster launch job reads that file to set `accelerator_type` and the Kubernetes `nvidia.com/gpu.product` node selector.
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `RAY_GPU_ACCELERATOR_TYPE` | `A10G` | Ray `accelerator_type` label; maps to `nvidia.com/gpu.product` |
-| `RAY_GPU_NODE_LABEL_VALUE` | *(auto)* | Override K8s label (e.g. `NVIDIA-A10G`). Use `none` to skip SKU placement |
-| `RAY_NIM_GPU_WORKER_COUNT` | `2` | GPU worker pods (one NIM per worker for LipSync + ASD) |
+Override worker count at AMP install via `RAY_NIM_GPU_WORKER_COUNT` (default `2` — one GPU worker each for LipSync and ASD).
 
-**Common `RAY_GPU_ACCELERATOR_TYPE` values:** `A10G`, `L40S`, `L4`, `T4`, `A100`, `H100`.
-
-Verify your cluster label on a GPU node:
+To inspect what was detected:
 
 ```bash
+cat cai/config/gpu_profile.json
 nvidia-smi --query-gpu=gpu_name --format=csv,noheader
-kubectl get nodes -L nvidia.com/gpu.product
 ```
 
-Fallback YAML defaults live in [`cai/ray/configs/ray_cluster_config.yaml`](ray/configs/ray_cluster_config.yaml) (overridden by the env vars above when set on the project).
-
-Also edit in that file:
+Edit [`cai/ray/configs/ray_cluster_config.yaml`](ray/configs/ray_cluster_config.yaml) for:
 
 - `cai.head_runtime_identifier` / `worker_runtime_identifier` — match registered custom runtime
 - `cai.head_app_name` — Ray head subdomain (or set `RAY_HEAD_APP_NAME` at AMP install)

@@ -1,9 +1,8 @@
 # Ray Cluster Configuration — Content Localization on CAI
 #
-# GPU SKU and worker count are overridden at AMP install time via project env vars:
-#   RAY_GPU_ACCELERATOR_TYPE  (default A10G)
-#   RAY_GPU_NODE_LABEL_VALUE  (optional; auto-derived when empty)
-#   RAY_NIM_GPU_WORKER_COUNT  (default 2)
+# GPU SKU is detected automatically from nvidia-smi during prerequisite validation
+# and stored in cai/config/gpu_profile.json for the Ray cluster launch job.
+# Override worker count at AMP install via RAY_NIM_GPU_WORKER_COUNT (default 2).
 
 ray_cluster:
   head_cpu: 8
@@ -18,9 +17,6 @@ ray_cluster:
       cpu: 8
       memory: 64
       gpus: 1
-      accelerator_type: A10G
-      node_label:
-        nvidia.com/gpu.product: "NVIDIA-A10G"
 
   ray_port: 6379
   dashboard_port: 8265

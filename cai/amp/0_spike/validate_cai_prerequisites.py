@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
 from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
+from cai.lib.gpu_config import detect_gpu_profile, save_gpu_profile  # noqa: E402
 from cai.lib.paths import PROJECT_ROOT, RAY_ROOT  # noqa: E402
 
 
@@ -52,7 +53,29 @@ def main() -> int:
     results.append(check("grpcurl available", grpcurl is not None, grpcurl or "install via custom runtime"))
 
     gpu_proc = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True)
-    results.append(check("NVIDIA GPU visible", gpu_proc.returncode == 0, gpu_proc.stdout.strip()[:120]))
+    gpu_visible = gpu_proc.returncode == 0
+    results.append(check("NVIDIA GPU visible", gpu_visible, gpu_proc.stdout.strip()[:120]))
+
+    gpu_profile = detect_gpu_profile() if gpu_visible else None
+    if gpu_profile:
+        profile_path = save_gpu_profile(gpu_profile)
+        results.append(
+            check(
+                "GPU profile detected",
+                True,
+                f"{gpu_profile.accelerator_type} -> {profile_path}",
+            )
+        )
+        report_gpu = gpu_profile.gpu_name
+    else:
+        results.append(
+            check(
+                "GPU profile detected",
+                False,
+                "nvidia-smi gpu_name required for Ray worker placement",
+            )
+        )
+        report_gpu = gpu_proc.stdout.strip() if gpu_visible else gpu_proc.stderr.strip()
 
     report = {
         "project_root": str(PROJECT_ROOT),
@@ -60,7 +83,8 @@ def main() -> int:
         "node": node_ver,
         "grpcurl": grpcurl,
         "ngc_key_set": bool(ngc_key),
-        "gpu": gpu_proc.stdout.strip() if gpu_proc.returncode == 0 else gpu_proc.stderr.strip(),
+        "gpu": report_gpu,
+        "gpu_profile": gpu_profile.to_dict() if gpu_profile else None,
     }
     report_path = PROJECT_ROOT / "cai" / "config" / "phase0_report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
