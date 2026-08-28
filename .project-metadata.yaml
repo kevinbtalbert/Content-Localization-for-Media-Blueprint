@@ -28,6 +28,24 @@ environment_variables:
   RAY_HEAD_APP_NAME:
     default: "content-localization-ray-head"
     description: "Ray cluster head application subdomain name"
+  RAY_GPU_ACCELERATOR_TYPE:
+    default: "A10G"
+    description: |
+      GPU SKU for Ray NIM workers (Ray accelerator_type + K8s node selector).
+      Common values: A10G, L40S, L4, T4, A100, H100.
+      Maps to nvidia.com/gpu.product unless RAY_GPU_NODE_LABEL_VALUE is set
+      (e.g. A10G -> NVIDIA-A10G, T4 -> NVIDIA-Tesla-T4).
+      Verify on a GPU node: nvidia-smi --query-gpu=gpu_name --format=csv,noheader
+  RAY_GPU_NODE_LABEL_VALUE:
+    default: ""
+    description: |
+      Optional override for nvidia.com/gpu.product (e.g. NVIDIA-A10G, NVIDIA-L40S).
+      Leave empty to auto-derive from RAY_GPU_ACCELERATOR_TYPE.
+      Set to "none" to disable GPU SKU node placement (schedule on any GPU node).
+  RAY_NIM_GPU_WORKER_COUNT:
+    default: "2"
+    description: |
+      Number of Ray GPU worker pods. Default 2 hosts LipSync and ASD (one GPU each).
 
 runtimes:
   - editor: JupyterLab

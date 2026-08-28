@@ -51,8 +51,12 @@ from jinja2 import Environment, FileSystemLoader
 
 # Add parent directory to path for imports
 script_dir = Path(__file__).parent
+project_root = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
 sys.path.insert(0, str(script_dir.parent))
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
+from cai.lib.gpu_config import apply_gpu_env_to_worker_groups
 from ray_serve_cai.cai_cluster import CAIClusterManager, WorkerGroupConfig
 
 # Jinja2 templates for generated launcher scripts
@@ -330,6 +334,9 @@ def load_config():
         if not _mon.get('grafana_iframe_host'):
             _mon['grafana_iframe_host'] = _mon['grafana_host']
 
+    if config.get('worker_groups'):
+        apply_gpu_env_to_worker_groups(config['worker_groups'])
+
     return config
 
 
@@ -464,8 +471,13 @@ def main():
     print(f"   Head Node     : {head_cpu} CPU, {head_memory} GB RAM  (no GPU)")
     print(f"   Management API: {mgmt_cpu} CPU, {mgmt_memory} GB RAM  (subset of head)")
     for g in worker_groups:
+        label = ""
+        if g.node_label:
+            key, val = next(iter(g.node_label.items()))
+            label = f", node_label={key}={val}"
+        accel = f", accelerator_type={g.accelerator_type}" if g.accelerator_type else ""
         print(f"   Worker group '{g.name}' [{g.node_type}]: "
-              f"{g.count} × {g.cpu} CPU, {g.memory} GB RAM, {g.gpus} GPU")
+              f"{g.count} × {g.cpu} CPU, {g.memory} GB RAM, {g.gpus} GPU{accel}{label}")
     print(f"   Ray Port      : {ray_config['ray_port']}")
     print(f"   Dashboard Port: {ray_config['dashboard_port']}")
 
