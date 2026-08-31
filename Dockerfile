@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
 # Unified Content Localization image for Docker Hub and Cloudera AI Workbench.
 #
-# Build:
-#   docker build -t <dockerhub-user>/content-localization:latest .
+# Build (requires NGC login for nvcr.io NIM stages):
+#   echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+#   docker build -t <dockerhub-user>/content-localization:1.2.0 .
 # Push:
-#   docker push <dockerhub-user>/content-localization:latest
+#   docker push <dockerhub-user>/content-localization:1.2.0
 #
 # Run full stack:
 #   docker run --gpus all -v /var/run/docker.sock:/var/run/docker.sock \
@@ -45,7 +46,16 @@ ENV NEXT_PUBLIC_INPUT_FILE_NAME=${NEXT_PUBLIC_INPUT_FILE_NAME} \
 RUN npm run generate-ts-protos && npm run build
 
 # ---------------------------------------------------------------------------
-# Stage 3 — unified runtime (Cloudera CUDA base + blueprint + tooling)
+# Stage 3 — NVIDIA NIM microservices (bundled into ContentLocalization image)
+# Requires: docker login nvcr.io before build (NGC_API_KEY).
+# ---------------------------------------------------------------------------
+ARG LIPSYNC_IMAGE=nvcr.io/nim/nvidia/lipsync:1.3.0
+ARG ASD_IMAGE=nvcr.io/nim/nvidia/active-speaker-detection:1.1.0
+FROM --platform=linux/amd64 ${LIPSYNC_IMAGE} AS nim-lipsync
+FROM --platform=linux/amd64 ${ASD_IMAGE} AS nim-asd
+
+# ---------------------------------------------------------------------------
+# Stage 4 — unified runtime (Cloudera CUDA base + blueprint + NIM bundles)
 # ---------------------------------------------------------------------------
 FROM --platform=linux/amd64 docker.repository.cloudera.com/cloudera/cdsw/ml-runtime-pbj-jupyterlab-python3.13-cuda:2026.08.1-b5
 
@@ -54,7 +64,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_ROOT=/opt/content-localization \
-    PIP_ROOT_USER_ACTION=ignore
+    PIP_ROOT_USER_ACTION=ignore \
+    NIM_BUNDLE_ROOT=/opt/nvidia-nim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl wget jq git ca-certificates gnupg \
@@ -77,6 +88,30 @@ COPY --from=demo-builder /usr/local/lib/libav*.so* /usr/local/lib/
 COPY --from=demo-builder /usr/local/lib/libsw*.so* /usr/local/lib/
 COPY --from=demo-builder /usr/local/lib/libpostproc*.so* /usr/local/lib/
 ENV LD_LIBRARY_PATH=/usr/local/lib
+
+# Copy NIM server trees into isolated prefixes (no Docker socket needed on CAI).
+COPY scripts/docker/record-nim-bundle-entrypoint.sh /tmp/record-nim-bundle-entrypoint.sh
+RUN chmod +x /tmp/record-nim-bundle-entrypoint.sh
+RUN --mount=from=nim-lipsync,source=/,target=/nim-src,readonly \
+    set -eux; \
+    mkdir -p "${NIM_BUNDLE_ROOT}/lipsync"; \
+    for path in opt/nim opt/nvidia opt/tritonserver usr/local/bin usr/local/lib usr/local/lib64; do \
+      if [ -e "/nim-src/${path}" ]; then \
+        mkdir -p "${NIM_BUNDLE_ROOT}/lipsync/$(dirname "${path}")"; \
+        cp -a "/nim-src/${path}" "${NIM_BUNDLE_ROOT}/lipsync/${path}"; \
+      fi; \
+    done; \
+    bash /tmp/record-nim-bundle-entrypoint.sh "${NIM_BUNDLE_ROOT}/lipsync"
+RUN --mount=from=nim-asd,source=/,target=/nim-src,readonly \
+    set -eux; \
+    mkdir -p "${NIM_BUNDLE_ROOT}/asd"; \
+    for path in opt/nim opt/nvidia opt/tritonserver usr/local/bin usr/local/lib usr/local/lib64; do \
+      if [ -e "/nim-src/${path}" ]; then \
+        mkdir -p "${NIM_BUNDLE_ROOT}/asd/$(dirname "${path}")"; \
+        cp -a "/nim-src/${path}" "${NIM_BUNDLE_ROOT}/asd/${path}"; \
+      fi; \
+    done; \
+    bash /tmp/record-nim-bundle-entrypoint.sh "${NIM_BUNDLE_ROOT}/asd"
 
 WORKDIR ${APP_ROOT}
 COPY pyproject.toml uv.lock README.md ./
@@ -105,10 +140,10 @@ COPY --from=demo-builder --chown=cdsw:cdsw /build/demo/.next ./client/demos/.nex
 
 ENV PYTHONPATH="${APP_ROOT}:${APP_ROOT}/src:${APP_ROOT}/client:${APP_ROOT}/protos/generated" \
     ML_RUNTIME_EDITION="ContentLocalization" \
-    ML_RUNTIME_SHORT_VERSION="1.1" \
+    ML_RUNTIME_SHORT_VERSION="1.2" \
     ML_RUNTIME_MAINTENANCE_VERSION=0 \
-    ML_RUNTIME_FULL_VERSION="1.1.0-content-localization" \
-    ML_RUNTIME_DESCRIPTION="Unified Content Localization image with CUDA 3.13, Docker, Node.js, grpcurl, and Ray/NIM tooling" \
+    ML_RUNTIME_FULL_VERSION="1.2.0-content-localization" \
+    ML_RUNTIME_DESCRIPTION="Content Localization with bundled LipSync/ASD NIM servers, CUDA 3.13, Node.js, and grpcurl" \
     LIPSYNC_MODEL_MOUNT_PATH=/var/lib/content-localization/models/lipsync \
     ASD_MODEL_MOUNT_PATH=/var/lib/content-localization/models/asd \
     APP_PORT=3000
@@ -123,7 +158,8 @@ LABEL org.opencontainers.image.title="Content Localization for Media"
 LABEL org.opencontainers.image.description="Unified NVIDIA Content Localization Blueprint image for Docker Hub and Cloudera AI Workbench"
 
 COPY cai/runtime/scripts/cai-runtime-startup.sh /etc/profile.d/content-localization-cai.sh
-RUN chmod +x /etc/profile.d/content-localization-cai.sh && \
+COPY cai/runtime/scripts/run-bundled-nim.sh /usr/local/bin/run-bundled-nim
+RUN chmod +x /etc/profile.d/content-localization-cai.sh /usr/local/bin/run-bundled-nim && \
     echo '[ -f /etc/profile.d/content-localization-cai.sh ] && source /etc/profile.d/content-localization-cai.sh' \
         >> /etc/bash.bashrc
 

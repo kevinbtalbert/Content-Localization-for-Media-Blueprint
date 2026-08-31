@@ -11,6 +11,10 @@ ngc_login() {
     echo "NGC_API_KEY is not set"
     return 1
   fi
+  if [[ ! -S /var/run/docker.sock ]]; then
+    echo "Skipping docker login (no Docker socket — CAI uses platform image pull for NIM apps)"
+    return 0
+  fi
   echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
 }
 

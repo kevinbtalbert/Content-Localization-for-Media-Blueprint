@@ -28,14 +28,30 @@ def _wait_for_file(path: Path, timeout_s: int = 300) -> None:
     raise TimeoutError(f"Timed out waiting for {path}")
 
 
+def _wait_for_nim_endpoints(timeout_s: int = 1200) -> None:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if not NIM_ENDPOINTS_JSON.exists():
+            time.sleep(10)
+            continue
+        data = json.loads(NIM_ENDPOINTS_JSON.read_text())
+        lipsync = data.get("lipsync") or data.get("lipsync-nim")
+        asd = data.get("asd") or data.get("asd-nim")
+        if lipsync and asd:
+            return
+        time.sleep(10)
+    raise TimeoutError(
+        f"Timed out waiting for LipSync and ASD entries in {NIM_ENDPOINTS_JSON}"
+    )
+
+
 def main() -> int:
     load_config_defaults()
 
-    if not NIM_ENDPOINTS_JSON.exists():
-        print(f"❌ Missing {NIM_ENDPOINTS_JSON} — deploy NIMs first")
-        return 1
-
+    print("Waiting for NIM GPU applications to publish endpoint metadata...")
+    _wait_for_nim_endpoints()
     _wait_for_file(S2S_ENDPOINT)
+
     nim_data = json.loads(NIM_ENDPOINTS_JSON.read_text())
     s2s_data = json.loads(S2S_ENDPOINT.read_text())
 

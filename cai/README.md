@@ -4,19 +4,21 @@ This directory contains the Cloudera AI (CAI) deployment overlay for the NVIDIA 
 
 ## Architecture
 
+CAI projects do **not** have a Docker socket. LipSync and ASD NIM servers are **bundled into the ContentLocalization runtime image** at build time (multi-stage `FROM nvcr.io/nim/...`). GPU applications start the bundled binaries directly — one registered runtime for everything.
+
 ```
+docker build (with NGC login) → bundles NIMs into ContentLocalization image
 AMP Install
-  → Prerequisites + Python deps + NIM image pull
-  → Ray cluster (head + 2 GPU workers)
-  → Deploy ASD + LipSync NIMs via Ray NIM engine
-  → Start S2S + Controller CML Applications
-  → Wire gRPC endpoints → Build + start Next.js UI
+  → Prerequisites + Python deps
+  → Start LipSync NIM GPU app (ContentLocalization runtime)
+  → Start ASD NIM GPU app (ContentLocalization runtime)
+  → Start S2S + Controller + Demo UI
 ```
 
 | Component | Where it runs | Protocol |
 |-----------|---------------|----------|
-| LipSync NIM | Ray GPU worker (Docker container) | gRPC :50054 |
-| ASD NIM | Ray GPU worker (Docker container) | gRPC :50055 |
+| LipSync NIM | CML GPU Application (bundled in image) | gRPC :50054 |
+| ASD NIM | CML GPU Application (bundled in image) | gRPC :50055 |
 | S2S | CML Application (CPU) | gRPC :50050 |
 | Controller | CML Application (CPU) | gRPC :50056 |
 | Demo UI | CML Application | HTTP/WebSocket |
@@ -33,7 +35,7 @@ AMP Install
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `NGC_API_KEY` | Yes | Pull NIM images from `nvcr.io` |
+| `NGC_API_KEY` | Yes (at AMP install) | NIM model access inside NIM application pods |
 | `S2S_SERVICE` | Yes | `EL_DUBBING` or `CAMB_DUBBING` |
 | `ELEVENLABS_API_KEY` | If EL | ElevenLabs dubbing API |
 | `CAMB_API_KEY` | If Camb | CambAI dubbing API |
@@ -43,18 +45,105 @@ AMP Install
 - `nvcr.io/nim/nvidia/active-speaker-detection:1.1.0`
 - `nvcr.io/nim/nvidia/lipsync:1.3.0` (requires [NVIDIA AI for Media Private Access](https://developer.nvidia.com/ai-for-media/private-access-program))
 
-## Custom runtime registration (admin)
+## Building the ContentLocalization runtime image
 
-Build and push the **single unified image** from the repository root:
+The root [`Dockerfile`](../Dockerfile) produces one image for CAI: blueprint tooling, demo UI, and **bundled LipSync/ASD NIM servers** under `/opt/nvidia-nim/`. Build from the **repository root** on a machine with Docker Desktop (or Docker Engine) running.
+
+### Before you start
+
+| Requirement | Notes |
+|-------------|--------|
+| Docker daemon running | `docker info` must succeed |
+| NGC API key | [Generate](https://org.ngc.nvidia.com/setup/api-key) with access to NIM images |
+| LipSync private access | [NVIDIA AI for Media](https://developer.nvidia.com/ai-for-media/private-access-program) for `lipsync:1.3.0` |
+| Disk space | Allow **50 GB+** free (NIM stages + final image) |
+| Build time | Often **30–90 minutes** depending on network and CPU |
+| Platform | Use `--platform linux/amd64` when building on Apple Silicon |
+
+### Credential safety (required)
+
+The NGC API key must **never** appear in git, Docker Hub, or image layers.
+
+| Do | Don't |
+|----|--------|
+| Export `NGC_API_KEY` in your **terminal session only** | Commit the key to `.env`, scripts, or the Dockerfile |
+| Use `docker login nvcr.io` before `docker build` | Pass `--build-arg NGC_API_KEY=...` (can leak into build history) |
+| `unset NGC_API_KEY` after login | Paste the key into GitHub issues, PRs, or AMP metadata |
+| Set `NGC_API_KEY` again at **CAI AMP install** (project env) for runtime model download | Bake the key into the image with `ENV NGC_API_KEY` |
+
+The Dockerfile pulls NIM source images during build using your **host** `docker login` session — the key is not copied into the final image.
+
+### Build and push
+
+From the repository root:
 
 ```bash
-docker build -t <registry>/content-localization:latest .
-docker push <registry>/content-localization:latest
+# 1. Set key in this shell only (not in any file)
+export NGC_API_KEY='<your-ngc-api-key>'
+
+# 2. Authenticate to NVIDIA Container Registry (host credential store only)
+echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+
+# 3. Optional: verify NIM images are reachable before the full build
+docker pull --platform linux/amd64 nvcr.io/nim/nvidia/lipsync:1.3.0
+docker pull --platform linux/amd64 nvcr.io/nim/nvidia/active-speaker-detection:1.1.0
+
+# 4. Build the unified runtime (linux/amd64 for CAI)
+docker build --platform linux/amd64 \
+  -t docker.io/<your-dockerhub-user>/contentlocalization:1.2.0 \
+  .
+
+# 5. Clear the key from your shell
+unset NGC_API_KEY
+
+# 6. Push to your registry (image contains no secrets)
+docker push docker.io/<your-dockerhub-user>/contentlocalization:1.2.0
 ```
 
-Register in **Admin → Runtime Catalog** using [`METADATA.yaml`](runtime/METADATA.yaml) and optionally [`repo-assembly.json`](runtime/repo-assembly.json) (replace `REPLACE_WITH_YOUR_IMAGE` with your pushed image, then add the raw GitHub URL under **Site Administration → Runtime**).
+Replace `<your-dockerhub-user>` with your registry namespace. Use a private registry instead of Docker Hub if your org requires it.
 
-The image includes Python 3.13 CUDA runtime, Docker CLI, Node.js 20, grpcurl, uv, the full blueprint, pre-built demo UI, and Ray/NIM tooling.
+### Verify the NIM bundle (optional)
+
+After the build, confirm bundled NIM trees exist:
+
+```bash
+docker run --rm --platform linux/amd64 \
+  docker.io/<your-dockerhub-user>/contentlocalization:1.2.0 \
+  bash -lc 'test -f /opt/nvidia-nim/lipsync/entrypoint && test -f /opt/nvidia-nim/asd/entrypoint && echo OK'
+```
+
+Expected output: `OK`. If either `entrypoint` file is missing, the NIM copy stages failed — check `docker login nvcr.io` and LipSync registry access, then rebuild.
+
+### What gets baked in vs downloaded later
+
+| At **image build** (your workstation) | At **CAI runtime** (GPU applications) |
+|----------------------------------------|----------------------------------------|
+| NIM server binaries under `/opt/nvidia-nim/` | NIM **model weights** downloaded on first start |
+| Python, Node, grpcurl, blueprint code, demo UI | Uses `NGC_API_KEY` from **project environment** |
+| `ML_RUNTIME_EDITION=ContentLocalization` labels | Prerequisite check verifies bundle paths exist |
+
+First LipSync/ASD application start on CAI may take **15–30 minutes** while models download.
+
+## Custom runtime registration (admin)
+
+Register **one** runtime in **Admin → Runtime Catalog**:
+
+1. Update [`repo-assembly.json`](runtime/repo-assembly.json): set `image_identifier` to your pushed tag (e.g. `docker.io/<user>/contentlocalization:1.2.0`).
+2. Register using [`METADATA.yaml`](runtime/METADATA.yaml) or upload `repo-assembly.json` under **Site Administration → Runtime**.
+3. Confirm catalog fields match the image labels:
+
+| Field | Value |
+|-------|-------|
+| Editor | JupyterLab |
+| Kernel | Python 3.13 |
+| Edition | ContentLocalization |
+| Version | 1.2 |
+
+Deprecate older `1.1` registrations after cutover.
+
+The image bundles LipSync + ASD NIM servers under `/opt/nvidia-nim/`, plus Python 3.13 CUDA, Node.js 20, grpcurl, uv, the blueprint, and pre-built demo UI.
+
+**Image size:** expect a large image (NIM bundles are multi-GB).
 
 ### AMP runtime auto-select
 
@@ -65,7 +154,7 @@ The AMP Configure Project screen picks a runtime by matching `.project-metadata.
 | Editor | JupyterLab |
 | Kernel | Python 3.13 |
 | Edition | ContentLocalization |
-| Version | 1.1 |
+| Version | 1.2 |
 
 If Configure Project defaults to **Nvidia GPU / 2026.08**, the custom runtime is not matched. Fix:
 
@@ -86,15 +175,14 @@ Rebuild the image after Dockerfile metadata changes so `ML_RUNTIME_*` labels mat
 
 1. Validate prerequisites (`cai/amp/0_spike/validate_cai_prerequisites.py`)
 2. Install Python deps + generate protos
-3. Pull NIM Docker images
-4. Setup Ray + NIM engine venvs
-5. Launch Ray cluster job
-6. Deploy NIMs via Ray Management API
-7. Start S2S application
-8. Wire endpoints (`cai/config/runtime_endpoints.env`)
-9. Start Controller application
-10. Build Next.js demo
-11. Start demo UI application
+3. Record NIM bundle configuration
+4. Start LipSync NIM GPU application (ContentLocalization runtime)
+5. Start ASD NIM GPU application (ContentLocalization runtime)
+6. Start S2S application
+7. Wire endpoints (`cai/config/runtime_endpoints.env`)
+8. Start Controller application
+9. Build Next.js demo
+10. Start demo UI application
 
 Enable **Unauthenticated App Access** for the `content-localization-ui` subdomain.
 
@@ -106,42 +194,20 @@ On a GPU session before full install:
 python cai/amp/0_spike/validate_cai_prerequisites.py
 ```
 
-Checks: Docker daemon, GPU visibility, GPU profile detection (`cai/config/gpu_profile.json`), `NGC_API_KEY`, Node.js, grpcurl.
+Checks: GPU visibility, `NGC_API_KEY`, bundled NIM trees at `/opt/nvidia-nim/{lipsync,asd}`, Node.js, grpcurl.
 
-## Ray cluster configuration
+## GPU profile
 
-GPU worker SKU is **detected automatically** from `nvidia-smi` during the prerequisite validation session (which runs on a GPU) and saved to `cai/config/gpu_profile.json`. The Ray cluster launch job reads that file to set `accelerator_type` and the Kubernetes `nvidia.com/gpu.product` node selector.
-
-Override worker count at AMP install via `RAY_NIM_GPU_WORKER_COUNT` (default `2` — one GPU worker each for LipSync and ASD).
-
-To inspect what was detected:
-
-```bash
-cat cai/config/gpu_profile.json
-nvidia-smi --query-gpu=gpu_name --format=csv,noheader
-```
-
-Edit [`cai/ray/configs/ray_cluster_config.yaml`](ray/configs/ray_cluster_config.yaml) for:
-
-- `cai.head_runtime_identifier` / `worker_runtime_identifier` — match registered custom runtime
-- `cai.head_app_name` — Ray head subdomain (or set `RAY_HEAD_APP_NAME` at AMP install)
-
-## NIM deployment configs
-
-- [`cai/ray/configs/nim_deploy/lipsync-nim.json`](ray/configs/nim_deploy/lipsync-nim.json)
-- [`cai/ray/configs/nim_deploy/asd-nim.json`](ray/configs/nim_deploy/asd-nim.json)
+GPU SKU is detected from `nvidia-smi` during the prerequisite session and saved to `cai/config/gpu_profile.json` for reference.
 
 Override `LIPSYNC_NIM_TAGS_SELECTOR` at AMP install for target language (default `language=de`).
 
 ## Post-install validation
 
 ```bash
-# Ray Management API
-curl -s https://content-localization-ray-head.<CDSW_DOMAIN>/api/v1/health
-
-# NIM health (from worker pod IP in cai/nim_endpoints.json)
-curl -s http://<worker-ip>:8004/v1/health/ready   # LipSync
-curl -s http://<worker-ip>:8005/v1/health/ready   # ASD
+# NIM health (pod IP in cai/nim_endpoints.json)
+curl -s http://<lipsync-pod-ip>:8004/v1/health/ready
+curl -s http://<asd-pod-ip>:8005/v1/health/ready
 
 # Demo UI
 open https://content-localization-ui.<CDSW_DOMAIN>
@@ -164,11 +230,12 @@ See the main [README.md](../README.md) for additional local development options.
 
 | Issue | Action |
 |-------|--------|
-| Prerequisite session: docker/node/grpcurl not found | Set project runtime to **ContentLocalization** (custom image from root `Dockerfile`), not stock Nvidia GPU |
-| Prerequisite session: NGC_API_KEY not set | Add under **Project Settings → Advanced → Environment** (AMP install values are not always visible to sessions) |
-| NIM pull fails | Verify `NGC_API_KEY` and LipSync private access |
+| Prerequisite session: NGC_API_KEY not set | Set at AMP Configure Project (required before install) |
+| Docker daemon not running during build | Start Docker Desktop; `docker info` must work before `docker build` |
+| `docker login` or NIM pull fails | Check NGC key and LipSync private access; never commit the key — use `export` in shell only |
+| NIM application fails at startup | Verify `NGC_API_KEY`; first start downloads models (15–30 min) |
 | Controller cannot reach NIM | Check `cai/config/runtime_endpoints.env` pod IPs; verify network policy allows gRPC between pods |
-| AMP timeout on NIM deploy | Increase job timeout; pre-pull images in install session |
+| AMP timeout on NIM startup | First NIM start downloads models — allow 15–30 min; check NGC key and LipSync private access |
 | Single GPU only | Deploy LipSync only; use `bypass_asd=True` in client requests |
 
 ## Directory layout

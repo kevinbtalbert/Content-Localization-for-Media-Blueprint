@@ -17,10 +17,7 @@ def bootstrap_sys_path() -> Path:
     return root
 
 
-def should_run_amp_entry(module_name: str) -> bool:
-    """True when invoked as a script or from a CAI/Jupyter run_session kernel."""
-    if module_name == "__main__":
-        return True
+def _running_in_ipython() -> bool:
     try:
         get_ipython  # type: ignore[name-defined]  # noqa: F821
     except NameError:
@@ -28,7 +25,20 @@ def should_run_amp_entry(module_name: str) -> bool:
     return True
 
 
+def should_run_amp_entry(module_name: str) -> bool:
+    """True when invoked as a script or from a CAI/Jupyter run_session kernel."""
+    if module_name == "__main__":
+        return True
+    return _running_in_ipython()
+
+
 def run_amp_entry(main_func: Callable[[], int], module_name: str) -> None:
     """Call main() for CLI and CAI AMP session execution."""
-    if should_run_amp_entry(module_name):
-        raise SystemExit(main_func())
+    if not should_run_amp_entry(module_name):
+        return
+    code = main_func()
+    # IPython/Jupyter run_session kernels treat SystemExit as an error even when
+    # code is 0, which makes CAI report "Engine exited with status 1".
+    if _running_in_ipython() and code == 0:
+        return
+    raise SystemExit(code)

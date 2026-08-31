@@ -15,9 +15,9 @@ amp_runtime_match:
   editor: JupyterLab
   kernel: Python 3.13
   edition: ContentLocalization
-  version: "1.1"
+  version: "1.2"
 
-docker_image_example: "docker.io/<your-user>/contentlocalization:1.1.0"
+docker_image_example: "docker.io/<your-user>/contentlocalization:1.2.0"
 
 catalog_classification:
   - Developer Example
@@ -25,10 +25,9 @@ tags:
   - content-localization
   - nvidia-nim
   - gpu
-  - ray
 product_mapping:
   - Cloudera AI Workbench
 description: |
-  Unified Docker image for NVIDIA Content Localization on Cloudera AI Workbench.
-  Build from the repository root Dockerfile and register in Runtime Catalog before
-  installing the AMP. Edition must be unique (not "Nvidia GPU").
+  Single Docker image for NVIDIA Content Localization on Cloudera AI Workbench.
+  LipSync and ASD NIM servers are bundled at image build time (multi-stage FROM
+  nvcr.io NIM images). Build requires NGC login; register one runtime edition only.

@@ -1,17 +1,17 @@
 name: Content Localization for Media
 description: |
   Deploy NVIDIA's Content Localization Blueprint on Cloudera AI Workbench with
-  local NIM inference (ASD + LipSync) on a Ray GPU cluster, ElevenLabs/CambAI
-  speech-to-speech dubbing, and the Next.js demo UI.
+  bundled LipSync/ASD NIM GPU applications, ElevenLabs/CambAI speech-to-speech
+  dubbing, and the Next.js demo UI — single ContentLocalization runtime.
 author: Cloudera
 specification_version: 1.0
-prototype_version: 1.1
+prototype_version: 1.2
 date: "2026-08-31"
 
 environment_variables:
   NGC_API_KEY:
     default: ""
-    description: "NGC API key for pulling NVIDIA NIM container images from nvcr"
+    description: "NGC API key for NVIDIA NIM model access (set at AMP install)"
   S2S_SERVICE:
     default: "EL_DUBBING"
     description: "Speech-to-Speech backend: EL_DUBBING (ElevenLabs) or CAMB_DUBBING (CambAI)"
@@ -25,27 +25,19 @@ environment_variables:
   S2S_DEFAULT_TARGET_LANGUAGE:
     default: "de"
     description: "Default target dubbing language"
-  RAY_HEAD_APP_NAME:
-    default: "content-localization-ray-head"
-    description: "Ray cluster head application subdomain name"
-  RAY_NIM_GPU_WORKER_COUNT:
-    default: "2"
-    description: |
-      Number of Ray GPU worker pods. Default 2 hosts LipSync and ASD (one GPU each).
 
 runtimes:
-  # Strings must match Runtime Catalog exactly (editor/kernel/edition/version).
-  # Custom image: build root Dockerfile; edition must NOT be stock "Nvidia GPU".
+  # Single registered runtime — NIM servers are bundled in this image at build time.
   - editor: JupyterLab
     kernel: Python 3.13
     edition: ContentLocalization
-    version: "1.1"
+    version: "1.2"
 
 tasks:
   - type: run_session
     name: Validate CAI Prerequisites
     script: cai/amp/0_spike/validate_cai_prerequisites.py
-    short_summary: Run Phase-0 prerequisite checks (Docker, GPU, NGC key)
+    short_summary: Run Phase-0 checks (GPU, NGC key, bundled NIMs)
     kernel: python3
     cpu: 2
     memory: 4
@@ -60,44 +52,40 @@ tasks:
     memory: 8
 
   - type: run_session
-    name: Pull NIM Container Images
-    script: cai/amp/1_install/pull_nim_images.py
-    short_summary: NGC login and docker pull for ASD and LipSync NIM images
-    kernel: python3
-    cpu: 2
-    memory: 8
-    gpu: 1
-
-  - type: run_session
-    name: Setup Ray Environments
-    script: cai/amp/2_ray_cluster/setup_ray_env.py
-    short_summary: Create Ray base and NIM engine virtual environments
-    kernel: python3
-    cpu: 4
-    memory: 16
-
-  - type: create_job
-    name: Launch Ray Cluster
-    entity_label: launch-ray-cluster
-    script: cai/ray/cai_integration/launch_ray_cluster_job.py
-    short_summary: Create job to launch Ray head and GPU workers
-    kernel: python3
-    cpu: 2
-    memory: 8
-    environment:
-      TASK_TYPE: CREATE/RUN_JOB
-
-  - type: run_job
-    entity_label: launch-ray-cluster
-    short_summary: Run Ray cluster launch job
-
-  - type: run_session
-    name: Deploy NIM Models
-    script: cai/amp/3_deploy_nims/deploy_nims.py
-    short_summary: Deploy ASD and LipSync NIMs via Ray Management API
+    name: Record NIM Bundle Configuration
+    script: cai/amp/1_install/record_nim_images.py
+    short_summary: Validate NGC key and record bundled NIM metadata
     kernel: python3
     cpu: 2
     memory: 4
+
+  - type: start_application
+    name: LipSync NIM
+    subdomain: cl-lipsync
+    entity_label: lipsync-nim
+    script: cai/amp/4_services/start_lipsync_nim.py
+    short_summary: Start bundled LipSync NIM (ContentLocalization runtime, 1 GPU)
+    kernel: python3
+    cpu: 4
+    memory: 32
+    gpu: 1
+    shared_memory_limit: 4
+    environment_variables:
+      TASK_TYPE: START_APPLICATION
+
+  - type: start_application
+    name: ASD NIM
+    subdomain: cl-asd
+    entity_label: asd-nim
+    script: cai/amp/4_services/start_asd_nim.py
+    short_summary: Start bundled ASD NIM (ContentLocalization runtime, 1 GPU)
+    kernel: python3
+    cpu: 4
+    memory: 32
+    gpu: 1
+    shared_memory_limit: 4
+    environment_variables:
+      TASK_TYPE: START_APPLICATION
 
   - type: start_application
     name: Speech-to-Speech Service
