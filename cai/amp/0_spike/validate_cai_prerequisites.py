@@ -52,22 +52,33 @@ def main() -> int:
             runtime_hint(docker or "not found"),
         )
     )
+    docker_daemon_ok = False
     if docker:
         proc = subprocess.run([docker, "info"], capture_output=True, text=True)
         docker_daemon_ok = proc.returncode == 0
         detail = proc.stderr.strip()[:160] if not docker_daemon_ok else "ok"
         if not docker_daemon_ok:
             detail = (
-                f"{detail} — GPU worker pods need Docker socket access for NIM containers"
+                f"{detail} — sessions often lack /var/run/docker.sock; "
+                "required for Pull NIM Images and Ray GPU workers (ask admin to enable)"
             )
-        results.append(check("docker daemon reachable", docker_daemon_ok, detail))
+        results.append(
+            check(
+                "docker daemon reachable",
+                docker_daemon_ok,
+                detail,
+                required=False,
+            )
+        )
 
     ngc_key = get_ngc_api_key()
     results.append(
         check(
             "NGC_API_KEY set",
             bool(ngc_key),
-            "set NGC_API_KEY in AMP install or Project Settings → Advanced → Environment",
+            "set in AMP Configure Project or Project Settings → Advanced → Environment "
+            "(required before Pull NIM Images)",
+            required=False,
         )
     )
 
@@ -134,7 +145,20 @@ def main() -> int:
     print(f"\nReport written to {report_path}")
 
     if all(results):
-        print("\nAll prerequisite checks passed.")
+        if not ngc_key or (docker and not docker_daemon_ok):
+            print("\nPrerequisite checks passed with warnings.")
+            if not ngc_key:
+                print(
+                    "  • Add NGC_API_KEY before the Pull NIM Images AMP step "
+                    "(Project Settings → Advanced → Environment)."
+                )
+            if docker and not docker_daemon_ok:
+                print(
+                    "  • Docker socket not available in this session — confirm your admin "
+                    "allows /var/run/docker.sock on GPU sessions/workers for NIM pull."
+                )
+        else:
+            print("\nAll prerequisite checks passed.")
         return 0
 
     print("\nOne or more checks failed. Review output before continuing the AMP install.")

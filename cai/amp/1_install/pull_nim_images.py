@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
 from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 from cai.lib.paths import ensure_cai_dirs  # noqa: E402
+from cai.lib.prerequisite_checks import get_ngc_api_key  # noqa: E402
 
 LIPSYNC_IMAGE = os.environ.get("LIPSYNC_IMAGE", "nvcr.io/nim/nvidia/lipsync:1.3.0")
 ASD_IMAGE = os.environ.get("ASD_IMAGE", "nvcr.io/nim/nvidia/active-speaker-detection:1.1.0")
@@ -19,9 +20,9 @@ ASD_IMAGE = os.environ.get("ASD_IMAGE", "nvcr.io/nim/nvidia/active-speaker-detec
 
 def main() -> int:
     ensure_cai_dirs()
-    api_key = os.environ.get("NGC_API_KEY", "")
+    api_key = get_ngc_api_key()
     if not api_key:
-        print("❌ NGC_API_KEY is required")
+        print("❌ NGC_API_KEY is required (Project Settings → Advanced → Environment)")
         return 1
 
     tags = os.environ.get("LIPSYNC_NIM_TAGS_SELECTOR", "language=de")
