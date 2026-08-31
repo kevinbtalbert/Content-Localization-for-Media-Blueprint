@@ -1,0 +1,18 @@
+{
+  "assembly_metadata_version": 1,
+  "runtimes": [
+    {
+      "image_identifier": "docker.io/REPLACE_WITH_YOUR_IMAGE:1.1.0",
+      "runtime_metadata_version": 2,
+      "editor": "JupyterLab",
+      "edition": "ContentLocalization",
+      "description": "Unified Content Localization image with CUDA 3.13, Docker, Node.js, grpcurl, and Ray/NIM tooling",
+      "kernel": "Python 3.13",
+      "full_version": "1.1.0-content-localization",
+      "short_version": "1.1",
+      "maintenance_version": 0,
+      "git_hash": "",
+      "gbn": 0
+    }
+  ]
+}

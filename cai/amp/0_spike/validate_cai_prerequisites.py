@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,41 +15,82 @@ sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 from cai.lib.gpu_config import detect_gpu_profile, save_gpu_profile  # noqa: E402
 from cai.lib.paths import PROJECT_ROOT, RAY_ROOT  # noqa: E402
+from cai.lib.prerequisite_checks import (  # noqa: E402
+    CUSTOM_RUNTIME_EDITION,
+    find_tool,
+    get_ngc_api_key,
+    runtime_hint,
+)
 
 
-def check(label: str, ok: bool, detail: str = "") -> bool:
-    status = "PASS" if ok else "FAIL"
+def check(label: str, ok: bool, detail: str = "", *, required: bool = True) -> bool:
+    status = "WARN" if not ok and not required else ("PASS" if ok else "FAIL")
     print(f"[{status}] {label}" + (f" — {detail}" if detail else ""))
-    return ok
+    if ok:
+        return True
+    return not required
 
 
 def main() -> int:
     print("=" * 70)
     print("CAI prerequisite validation (Phase 0 spike)")
     print("=" * 70)
+    print(f"Expected runtime edition: {CUSTOM_RUNTIME_EDITION}")
+    print(f"ML_RUNTIME_EDITION: {os.environ.get('ML_RUNTIME_EDITION', '(not set)')}")
+    print()
 
     results: list[bool] = []
 
     results.append(check("Project root exists", PROJECT_ROOT.exists(), str(PROJECT_ROOT)))
     results.append(check("Ray integration present", (RAY_ROOT / "cai_integration").exists()))
 
-    docker = shutil.which("docker")
-    results.append(check("docker CLI available", docker is not None, docker or "not found"))
+    docker = find_tool("docker")
+    results.append(
+        check(
+            "docker CLI available",
+            docker is not None,
+            runtime_hint(docker or "not found"),
+        )
+    )
     if docker:
         proc = subprocess.run([docker, "info"], capture_output=True, text=True)
-        results.append(check("docker daemon reachable", proc.returncode == 0, proc.stderr.strip()[:120]))
+        docker_daemon_ok = proc.returncode == 0
+        detail = proc.stderr.strip()[:160] if not docker_daemon_ok else "ok"
+        if not docker_daemon_ok:
+            detail = (
+                f"{detail} — GPU worker pods need Docker socket access for NIM containers"
+            )
+        results.append(check("docker daemon reachable", docker_daemon_ok, detail))
 
-    ngc_key = os.environ.get("NGC_API_KEY", "")
-    results.append(check("NGC_API_KEY set", bool(ngc_key), "required for NIM image pull"))
+    ngc_key = get_ngc_api_key()
+    results.append(
+        check(
+            "NGC_API_KEY set",
+            bool(ngc_key),
+            "set NGC_API_KEY in AMP install or Project Settings → Advanced → Environment",
+        )
+    )
 
-    node = shutil.which("node")
+    node = find_tool("node")
     node_ver = ""
     if node:
         node_ver = subprocess.run([node, "--version"], capture_output=True, text=True).stdout.strip()
-    results.append(check("node available", node is not None, node_ver or "not found"))
+    results.append(
+        check(
+            "node available",
+            node is not None,
+            runtime_hint(node_ver or "not found"),
+        )
+    )
 
-    grpcurl = shutil.which("grpcurl")
-    results.append(check("grpcurl available", grpcurl is not None, grpcurl or "install via custom runtime"))
+    grpcurl = find_tool("grpcurl")
+    results.append(
+        check(
+            "grpcurl available",
+            grpcurl is not None,
+            runtime_hint(grpcurl or "not found"),
+        )
+    )
 
     gpu_proc = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True)
     gpu_visible = gpu_proc.returncode == 0
@@ -79,6 +119,8 @@ def main() -> int:
 
     report = {
         "project_root": str(PROJECT_ROOT),
+        "runtime_edition": os.environ.get("ML_RUNTIME_EDITION"),
+        "expected_runtime_edition": CUSTOM_RUNTIME_EDITION,
         "docker": docker,
         "node": node_ver,
         "grpcurl": grpcurl,
@@ -94,7 +136,18 @@ def main() -> int:
     if all(results):
         print("\nAll prerequisite checks passed.")
         return 0
-    print("\nOne or more checks failed. Review output before AMP install.")
+
+    print("\nOne or more checks failed. Review output before continuing the AMP install.")
+    if os.environ.get("ML_RUNTIME_EDITION") != CUSTOM_RUNTIME_EDITION:
+        print(
+            f"\nTip: set the project runtime to '{CUSTOM_RUNTIME_EDITION}' "
+            "(built from the repository root Dockerfile and registered in Runtime Catalog)."
+        )
+    if not ngc_key:
+        print(
+            "\nTip: add NGC_API_KEY under Project Settings → Advanced → Environment, "
+            "then re-run this session."
+        )
     return 1
 
 

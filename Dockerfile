@@ -104,20 +104,21 @@ COPY --from=demo-builder --chown=cdsw:cdsw /build/demo/package.json ./client/dem
 COPY --from=demo-builder --chown=cdsw:cdsw /build/demo/.next ./client/demos/.next
 
 ENV PYTHONPATH="${APP_ROOT}:${APP_ROOT}/src:${APP_ROOT}/client:${APP_ROOT}/protos/generated" \
-    ML_RUNTIME_EDITION="Content Localization for Media (CUDA 3.13)" \
+    ML_RUNTIME_EDITION="ContentLocalization" \
+    ML_RUNTIME_SHORT_VERSION="1.1" \
+    ML_RUNTIME_MAINTENANCE_VERSION=0 \
+    ML_RUNTIME_FULL_VERSION="1.1.0-content-localization" \
+    ML_RUNTIME_DESCRIPTION="Unified Content Localization image with CUDA 3.13, Docker, Node.js, grpcurl, and Ray/NIM tooling" \
     LIPSYNC_MODEL_MOUNT_PATH=/var/lib/content-localization/models/lipsync \
     ASD_MODEL_MOUNT_PATH=/var/lib/content-localization/models/asd \
     APP_PORT=3000
 
-# Override CML metadata labels to make this a unique custom runtime
-ARG RUNTIME_FULL_VERSION=1.1.0-content-localization
-ARG RUNTIME_SHORT_VERSION=1.1
-ARG RUNTIME_MAINTENANCE_VERSION=0
-
-LABEL com.cloudera.ml.runtime.edition="${ML_RUNTIME_EDITION}"
-LABEL com.cloudera.ml.runtime.full-version="${RUNTIME_FULL_VERSION}"
-LABEL com.cloudera.ml.runtime.short-version="${RUNTIME_SHORT_VERSION}"
-LABEL com.cloudera.ml.runtime.maintenance-version="${RUNTIME_MAINTENANCE_VERSION}"
+# Runtime catalog metadata (ENV + LABEL must match; AMP runtimes block uses the same strings).
+LABEL com.cloudera.ml.runtime.edition=$ML_RUNTIME_EDITION \
+    com.cloudera.ml.runtime.short-version=$ML_RUNTIME_SHORT_VERSION \
+    com.cloudera.ml.runtime.maintenance-version=$ML_RUNTIME_MAINTENANCE_VERSION \
+    com.cloudera.ml.runtime.full-version=$ML_RUNTIME_FULL_VERSION \
+    com.cloudera.ml.runtime.description=$ML_RUNTIME_DESCRIPTION
 LABEL org.opencontainers.image.title="Content Localization for Media"
 LABEL org.opencontainers.image.description="Unified NVIDIA Content Localization Blueprint image for Docker Hub and Cloudera AI Workbench"
 

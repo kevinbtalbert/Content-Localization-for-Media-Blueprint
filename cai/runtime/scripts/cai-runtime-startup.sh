@@ -3,6 +3,8 @@
 # Content Localization CAI runtime startup helpers
 
 export CONTENT_LOCALIZATION_CAI_HOME="${CONTENT_LOCALIZATION_CAI_HOME:-/home/cdsw/cai}"
+export APP_ROOT="${APP_ROOT:-/opt/content-localization}"
+export PATH="/usr/local/bin:/usr/bin:/bin:${APP_ROOT}/scripts/docker:${PATH:-}"
 
 ngc_login() {
   if [[ -z "${NGC_API_KEY:-}" ]]; then

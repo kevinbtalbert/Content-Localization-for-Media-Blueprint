@@ -52,9 +52,29 @@ docker build -t <registry>/content-localization:latest .
 docker push <registry>/content-localization:latest
 ```
 
-Register in **Admin → Runtime Catalog** using [`METADATA.yaml`](runtime/METADATA.yaml).
+Register in **Admin → Runtime Catalog** using [`METADATA.yaml`](runtime/METADATA.yaml) and optionally [`repo-assembly.json`](runtime/repo-assembly.json) (replace `REPLACE_WITH_YOUR_IMAGE` with your pushed image, then add the raw GitHub URL under **Site Administration → Runtime**).
 
 The image includes Python 3.13 CUDA runtime, Docker CLI, Node.js 20, grpcurl, uv, the full blueprint, pre-built demo UI, and Ray/NIM tooling.
+
+### AMP runtime auto-select
+
+The AMP Configure Project screen picks a runtime by matching `.project-metadata.yaml`:
+
+| Field | Value |
+|-------|-------|
+| Editor | JupyterLab |
+| Kernel | Python 3.13 |
+| Edition | ContentLocalization |
+| Version | 1.1 |
+
+If Configure Project defaults to **Nvidia GPU / 2026.08**, the custom runtime is not matched. Fix:
+
+1. **Register** the custom image in Runtime Catalog (edition must be unique — not `Nvidia GPU`).
+2. **Refresh** the AMP catalog (**Site Administration → AMPs → Refresh**) after pushing metadata updates.
+3. On Configure Project, set **Edition** to **ContentLocalization** and leave **Enable Spark** off.
+4. Optional: in Runtime Catalog, mark the custom runtime as **Default** (admin).
+
+Rebuild the image after Dockerfile metadata changes so `ML_RUNTIME_*` labels match the table above.
 
 ## AMP installation
 
@@ -144,7 +164,8 @@ See the main [README.md](../README.md) for additional local development options.
 
 | Issue | Action |
 |-------|--------|
-| Docker-in-Docker unavailable | Run `validate_cai_prerequisites.py`; contact admin for Docker socket access on GPU pods |
+| Prerequisite session: docker/node/grpcurl not found | Set project runtime to **ContentLocalization** (custom image from root `Dockerfile`), not stock Nvidia GPU |
+| Prerequisite session: NGC_API_KEY not set | Add under **Project Settings → Advanced → Environment** (AMP install values are not always visible to sessions) |
 | NIM pull fails | Verify `NGC_API_KEY` and LipSync private access |
 | Controller cannot reach NIM | Check `cai/config/runtime_endpoints.env` pod IPs; verify network policy allows gRPC between pods |
 | AMP timeout on NIM deploy | Increase job timeout; pre-pull images in install session |

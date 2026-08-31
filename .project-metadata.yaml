@@ -5,8 +5,8 @@ description: |
   speech-to-speech dubbing, and the Next.js demo UI.
 author: Cloudera
 specification_version: 1.0
-prototype_version: 1.0
-date: "2026-08-27"
+prototype_version: 1.1
+date: "2026-08-31"
 
 environment_variables:
   NGC_API_KEY:
@@ -34,9 +34,12 @@ environment_variables:
       Number of Ray GPU worker pods. Default 2 hosts LipSync and ASD (one GPU each).
 
 runtimes:
+  # Strings must match Runtime Catalog exactly (editor/kernel/edition/version).
+  # Custom image: build root Dockerfile; edition must NOT be stock "Nvidia GPU".
   - editor: JupyterLab
     kernel: Python 3.13
-    edition: Nvidia GPU
+    edition: ContentLocalization
+    version: "1.1"
 
 tasks:
   - type: run_session
