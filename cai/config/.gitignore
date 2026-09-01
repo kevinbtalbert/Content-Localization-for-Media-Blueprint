@@ -5,3 +5,5 @@ controller_endpoint.json
 nim_endpoints.json
 phase0_report.json
 gpu_profile.json
+lipsync_nim.env
+asd_nim.env

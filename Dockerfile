@@ -142,8 +142,8 @@ ENV PYTHONPATH="${APP_ROOT}:${APP_ROOT}/src:${APP_ROOT}/client:${APP_ROOT}/proto
     ML_RUNTIME_MAINTENANCE_VERSION=0 \
     ML_RUNTIME_FULL_VERSION="1.2.0-content-localization" \
     ML_RUNTIME_DESCRIPTION="Content Localization with bundled LipSync/ASD NIM servers, CUDA 3.13, Node.js, and grpcurl" \
-    LIPSYNC_MODEL_MOUNT_PATH=/var/lib/content-localization/models/lipsync \
-    ASD_MODEL_MOUNT_PATH=/var/lib/content-localization/models/asd \
+    LIPSYNC_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/lipsync \
+    ASD_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/asd \
     APP_PORT=3000
 
 # Runtime catalog metadata (ENV + LABEL must match; AMP runtimes block uses the same strings).

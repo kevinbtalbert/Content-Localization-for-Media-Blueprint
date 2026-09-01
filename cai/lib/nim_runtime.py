@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import socket
 import subprocess
 import sys
@@ -17,7 +18,25 @@ from cai.lib.cai_common import merge_nim_endpoints
 
 PROJECT_ROOT = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
 NIM_BUNDLE_ROOT = Path(os.environ.get("NIM_BUNDLE_ROOT", "/opt/nvidia-nim"))
-RUN_BUNDLED_NIM = Path("/usr/local/bin/run-bundled-nim")
+RUN_BUNDLED_NIM_IMAGE = Path("/usr/local/bin/run-bundled-nim")
+
+LIPSYNC_NIM_ENV_KEYS = (
+    "NGC_API_KEY",
+    "NIM_HTTP_API_PORT",
+    "NIM_GRPC_API_PORT",
+    "NIM_TAGS_SELECTOR",
+    "NIM_MAX_CONCURRENCY_PER_GPU",
+    "NIM_CACHE_DIR",
+    "LIPSYNC_DEBUG_MODE",
+)
+ASD_NIM_ENV_KEYS = (
+    "NGC_API_KEY",
+    "NIM_HTTP_API_PORT",
+    "NIM_GRPC_API_PORT",
+    "MAXINE_MAX_CONCURRENCY_PER_GPU",
+    "NIM_MAX_CONCURRENCY_PER_GPU",
+    "NIM_CACHE_DIR",
+)
 
 LIPSYNC_DEFAULTS = {
     "source_image": "nvcr.io/nim/nvidia/lipsync:1.3.0",
@@ -47,6 +66,28 @@ def nim_cache_dir(nim_type: str, env_var: str) -> str:
         path = project / "volumes" / "models" / nim_type
     path.mkdir(parents=True, exist_ok=True)
     return str(path)
+
+
+def resolve_run_bundled_nim() -> Path:
+    """Prefer the project launcher (synced from git) over the image-baked copy."""
+    project_script = PROJECT_ROOT / "cai" / "runtime" / "scripts" / "run-bundled-nim.sh"
+    if project_script.is_file():
+        return project_script
+    return RUN_BUNDLED_NIM_IMAGE
+
+
+def write_nim_shell_env(nim_type: str, keys: tuple[str, ...]) -> Path:
+    """Write NIM env vars for `source` by launch shell scripts (Python subprocess cannot export)."""
+    path = PROJECT_ROOT / "cai" / "config" / f"{nim_type}_nim.env"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines: list[str] = []
+    for key in keys:
+        value = os.environ.get(key)
+        if value is None:
+            continue
+        lines.append(f"export {key}={shlex.quote(value)}")
+    path.write_text("\n".join(lines) + "\n")
+    return path
 
 
 def pod_ip() -> str:
@@ -156,6 +197,7 @@ def configure_lipsync_env() -> dict[str, Any]:
         "LIPSYNC_DEBUG_MODE": os.environ.get("LIPSYNC_DEBUG_MODE", "0"),
     }
     os.environ.update(env)
+    write_nim_shell_env("lipsync", LIPSYNC_NIM_ENV_KEYS)
     return {
         "nim_type": "lipsync",
         "name": "lipsync-nim",
@@ -184,6 +226,7 @@ def configure_asd_env() -> dict[str, Any]:
         "NIM_CACHE_DIR": cache_dir,
     }
     os.environ.update(env)
+    write_nim_shell_env("asd", ASD_NIM_ENV_KEYS)
     return {
         "nim_type": "asd",
         "name": "asd-nim",
@@ -202,11 +245,12 @@ def run_nim_server(nim_type: str) -> int:
             f"Bundled NIM server for '{nim_type}' is missing under {bundle}. "
             "Rebuild and re-register the ContentLocalization runtime image (see Dockerfile)."
         )
-    if not RUN_BUNDLED_NIM.is_file():
-        raise RuntimeError(f"Missing launcher script: {RUN_BUNDLED_NIM}")
+    if not resolve_run_bundled_nim().is_file():
+        raise RuntimeError(f"Missing launcher script: {resolve_run_bundled_nim()}")
 
     entrypoint = (bundle / "entrypoint").read_text().strip()
-    cmd = [str(RUN_BUNDLED_NIM), nim_type]
+    launcher = resolve_run_bundled_nim()
+    cmd = [str(launcher), nim_type]
     print(f"Starting bundled NIM: {' '.join(cmd)}", flush=True)
     print(f"  bundle={bundle}", flush=True)
     print(f"  entrypoint={entrypoint}", flush=True)

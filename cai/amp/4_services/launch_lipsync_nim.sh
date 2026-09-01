@@ -28,4 +28,16 @@ start_endpoint_publisher(
 )
 PY
 
-exec /usr/local/bin/run-bundled-nim lipsync
+# Python subprocess env does not propagate to this shell — source the env file it wrote.
+# shellcheck source=/dev/null
+source "${project}/cai/config/lipsync_nim.env"
+
+# Image ENV may still point at /var/lib; never use those paths on CAI.
+unset LIPSYNC_MODEL_MOUNT_PATH
+
+launcher="${project}/cai/runtime/scripts/run-bundled-nim.sh"
+if [[ ! -f "${launcher}" ]]; then
+  launcher="/usr/local/bin/run-bundled-nim"
+fi
+chmod +x "${launcher}" 2>/dev/null || true
+exec "${launcher}" lipsync

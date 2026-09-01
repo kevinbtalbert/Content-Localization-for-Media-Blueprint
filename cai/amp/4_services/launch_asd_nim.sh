@@ -28,4 +28,13 @@ start_endpoint_publisher(
 )
 PY
 
-exec /usr/local/bin/run-bundled-nim asd
+# shellcheck source=/dev/null
+source "${project}/cai/config/asd_nim.env"
+unset ASD_MODEL_MOUNT_PATH
+
+launcher="${project}/cai/runtime/scripts/run-bundled-nim.sh"
+if [[ ! -f "${launcher}" ]]; then
+  launcher="/usr/local/bin/run-bundled-nim"
+fi
+chmod +x "${launcher}" 2>/dev/null || true
+exec "${launcher}" asd
