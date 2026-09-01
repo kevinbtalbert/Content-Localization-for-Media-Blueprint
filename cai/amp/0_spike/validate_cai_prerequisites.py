@@ -22,7 +22,6 @@ from cai.lib.nim_runtime import (  # noqa: E402
 from cai.lib.paths import PROJECT_ROOT, RAY_ROOT  # noqa: E402
 from cai.lib.prerequisite_checks import (  # noqa: E402
     CUSTOM_RUNTIME_EDITION,
-    describe_env_secret,
     find_tool,
     get_elevenlabs_api_key,
     get_ngc_api_key,
@@ -53,24 +52,22 @@ def main() -> int:
     results.append(check("Ray integration present", (RAY_ROOT / "cai_integration").exists()))
 
     ngc_key = get_ngc_api_key()
-    ngc_detail = describe_env_secret("NGC_API_KEY", "LIPSYNC_API_KEY", "ASD_API_KEY")
     results.append(
         check(
             "NGC_API_KEY set",
             bool(ngc_key),
-            ngc_detail,
+            f"{len(ngc_key)} chars" if ngc_key else "os.environ.get('NGC_API_KEY') is empty",
         )
     )
 
     s2s_service = os.environ.get("S2S_SERVICE", "EL_DUBBING")
     if s2s_service == "EL_DUBBING":
         eleven_key = get_elevenlabs_api_key()
-        el_detail = describe_env_secret("ELEVENLABS_API_KEY")
         results.append(
             check(
                 "ELEVENLABS_API_KEY set",
                 bool(eleven_key),
-                el_detail,
+                f"{len(eleven_key)} chars" if eleven_key else "os.environ.get('ELEVENLABS_API_KEY') is empty",
                 required=False,
             )
         )
@@ -154,7 +151,6 @@ def main() -> int:
         "node": node_ver,
         "grpcurl": grpcurl,
         "ngc_key_set": bool(ngc_key),
-        "ngc_key_status": ngc_detail,
         "s2s_service": s2s_service,
         "elevenlabs_key_set": bool(get_elevenlabs_api_key()) if s2s_service == "EL_DUBBING" else None,
         "gpu": report_gpu,
@@ -177,15 +173,9 @@ def main() -> int:
         )
     if not ngc_key:
         print(
-            "\nTip: set NGC_API_KEY under Project Settings → Advanced → Environment "
-            "as a plain string (not [object Object]), click Submit, then start a "
-            "new session — existing sessions do not pick up env changes."
+            "\nTip: set NGC_API_KEY under Project Settings → Advanced → Environment, "
+            "click Submit, then start a new session."
         )
-        if "[object Object]" in ngc_detail or "[object object]" in ngc_detail.lower():
-            print(
-                "     Delete the broken NGC_API_KEY row, add it again with your key, "
-                "and avoid leaving the AMP default metadata object in the value field."
-            )
     return 1
 
 

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from cai.lib.cai_common import merge_nim_endpoints
-from cai.lib.prerequisite_checks import describe_env_secret, get_ngc_api_key
+from cai.lib.prerequisite_checks import get_ngc_api_key
 
 PROJECT_ROOT = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
 NIM_BUNDLE_ROOT = Path(os.environ.get("NIM_BUNDLE_ROOT", "/opt/nvidia-nim"))
@@ -225,9 +225,8 @@ def write_nim_image_manifest() -> Path:
 def validate_ngc_for_nim() -> str:
     api_key = get_ngc_api_key()
     if not api_key:
-        detail = describe_env_secret("NGC_API_KEY", "LIPSYNC_API_KEY", "ASD_API_KEY")
         raise RuntimeError(
             "NGC_API_KEY must be set in AMP Configure Project or "
-            f"Project Settings → Advanced → Environment ({detail})"
+            "Project Settings → Advanced → Environment"
         )
     return api_key
