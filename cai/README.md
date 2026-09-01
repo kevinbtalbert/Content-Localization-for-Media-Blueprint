@@ -231,6 +231,7 @@ See the main [README.md](../README.md) for additional local development options.
 | Issue | Action |
 |-------|--------|
 | Prerequisite session: NGC_API_KEY not set | Set at AMP Configure Project (required before install) |
+| Project Settings shows `[object Object]` for a key | Delete that env row, re-add the variable with your plain key string, Submit, start a **new** session |
 | Docker daemon not running during build | Start Docker Desktop; `docker info` must work before `docker build` |
 | `docker login` or NIM pull fails | Check NGC key and LipSync private access; never commit the key — use `export` in shell only |
 | NIM application fails at startup | Verify `NGC_API_KEY`; first start downloads models (15–30 min) |

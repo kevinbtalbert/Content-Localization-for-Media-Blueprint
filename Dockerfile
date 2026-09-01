@@ -49,10 +49,8 @@ RUN npm run generate-ts-protos && npm run build
 # Stage 3 — NVIDIA NIM microservices (bundled into ContentLocalization image)
 # Requires: docker login nvcr.io before build (NGC_API_KEY).
 # ---------------------------------------------------------------------------
-ARG LIPSYNC_IMAGE=nvcr.io/nim/nvidia/lipsync:1.3.0
-ARG ASD_IMAGE=nvcr.io/nim/nvidia/active-speaker-detection:1.1.0
-FROM --platform=linux/amd64 ${LIPSYNC_IMAGE} AS nim-lipsync
-FROM --platform=linux/amd64 ${ASD_IMAGE} AS nim-asd
+FROM --platform=linux/amd64 nvcr.io/nim/nvidia/lipsync:1.3.0 AS nim-lipsync
+FROM --platform=linux/amd64 nvcr.io/nim/nvidia/active-speaker-detection:1.1.0 AS nim-asd
 
 # ---------------------------------------------------------------------------
 # Stage 4 — unified runtime (Cloudera CUDA base + blueprint + NIM bundles)
