@@ -74,7 +74,7 @@ Before setting up the development environment, ensure you have the following ins
 
 - **Operating System**: Linux (Ubuntu 22.04 or 24.04 recommended)
 - **Python**: 3.12 or higher
-- **Git**: With Git LFS enabled
+- **Git**: Git LFS optional (only for large model/docs assets; sample MP4s are fetched separately)
 - **NVIDIA GPU**: With CUDA-capable drivers installed
 - **CUDA Toolkit**: CUDA 12.x
 - **TensorRT**: Compatible with your CUDA version
@@ -104,6 +104,12 @@ sudo apt-get install -y \
     curl \
     wget \
     git-lfs
+```
+
+Sample demo videos are **not** in git (fast clones for CAI AMP). Fetch when needed:
+
+```bash
+bash scripts/misc/fetch_sample_assets.sh
 ```
 
 ### Required Credentials

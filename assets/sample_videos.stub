@@ -1,0 +1,11 @@
+Sample MP4 files are not stored in this repository (keeps AMP/git clones fast).
+
+When you need them for local clients, functional tests, or the demo UI:
+
+  bash scripts/misc/fetch_sample_assets.sh
+
+Expected files after fetch (gitignored, local only):
+  - assets/sample_video.mp4
+  - assets/sample_video_streamable.mp4
+
+Or pass your own video with --input-mp4 on any client.

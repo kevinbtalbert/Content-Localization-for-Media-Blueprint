@@ -1,5 +1,4 @@
 *.onnx filter=lfs diff=lfs merge=lfs -text
 *.trt filter=lfs diff=lfs merge=lfs -text
-*.mp4 filter=lfs diff=lfs merge=lfs -text
 docs/source/architecture_diagram.png filter=lfs diff=lfs merge=lfs -text
 docs/Architecture[[:space:]]Diagram.png filter=lfs diff=lfs merge=lfs -text

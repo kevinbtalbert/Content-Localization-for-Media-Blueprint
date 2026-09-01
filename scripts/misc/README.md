@@ -7,6 +7,7 @@ ElevenLabs configuration.
 
 | Script | Purpose |
 | --- | --- |
+| `fetch_sample_assets.sh` | Download sample MP4s from upstream (not stored in git). |
 | `setup_env.sh` | Bootstrap dev environment from a fresh Ubuntu install. |
 | `copy_docker_logs.sh` | Copy Docker container logs to local files. |
 | `convert_to_streamable_mp4.sh` | Re-encode video with `faststart` for streamable MP4. |
