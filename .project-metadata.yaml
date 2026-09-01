@@ -10,16 +10,16 @@ date: "2026-08-31"
 
 environment_variables:
   NGC_API_KEY:
-    default: null
+    default: ""
     description: "NGC API key for NVIDIA NIM model access (set at AMP install)"
   S2S_SERVICE:
     default: "EL_DUBBING"
     description: "Speech-to-Speech backend: EL_DUBBING (ElevenLabs) or CAMB_DUBBING (CambAI)"
   ELEVENLABS_API_KEY:
-    default: null
+    default: ""
     description: "ElevenLabs API key (required when S2S_SERVICE=EL_DUBBING)"
   CAMB_API_KEY:
-    default: null
+    default: ""
     description: "CambAI API key (required when S2S_SERVICE=CAMB_DUBBING)"
   LIPSYNC_NIM_TAGS_SELECTOR:
     default: "language=de"
