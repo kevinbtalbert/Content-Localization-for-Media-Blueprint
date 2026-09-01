@@ -23,14 +23,30 @@ LIPSYNC_DEFAULTS = {
     "source_image": "nvcr.io/nim/nvidia/lipsync:1.3.0",
     "http_port": 8004,
     "grpc_port": 50054,
-    "cache_dir": "/var/lib/content-localization/models/lipsync",
 }
 ASD_DEFAULTS = {
     "source_image": "nvcr.io/nim/nvidia/active-speaker-detection:1.1.0",
     "http_port": 8005,
     "grpc_port": 50055,
-    "cache_dir": "/var/lib/content-localization/models/asd",
 }
+
+
+def nim_cache_dir(nim_type: str, env_var: str) -> str:
+    """Model weights cache under the CAI project home (/home/cdsw is writable)."""
+    project = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
+    override = os.environ.get(env_var, "").strip()
+    if override.startswith("/home/cdsw"):
+        path = Path(override)
+    else:
+        if override:
+            print(
+                f"Ignoring {env_var}={override!r} (use a path under /home/cdsw on CAI); "
+                f"using {project / 'volumes' / 'models' / nim_type}",
+                file=sys.stderr,
+            )
+        path = project / "volumes" / "models" / nim_type
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 def pod_ip() -> str:
@@ -127,10 +143,8 @@ def configure_lipsync_env() -> dict[str, Any]:
 
     http_port = os.environ.get("LIPSYNC_NIM_HTTP_API_PORT", str(LIPSYNC_DEFAULTS["http_port"]))
     grpc_port = os.environ.get("LIPSYNC_NIM_GRPC_API_PORT", str(LIPSYNC_DEFAULTS["grpc_port"]))
-    cache_dir = os.environ.get("LIPSYNC_MODEL_MOUNT_PATH", LIPSYNC_DEFAULTS["cache_dir"])
+    cache_dir = nim_cache_dir("lipsync", "LIPSYNC_MODEL_MOUNT_PATH")
     tags = os.environ.get("LIPSYNC_NIM_TAGS_SELECTOR", "language=de")
-
-    Path(cache_dir).mkdir(parents=True, exist_ok=True)
 
     env = {
         "NGC_API_KEY": api_key,
@@ -159,9 +173,7 @@ def configure_asd_env() -> dict[str, Any]:
 
     http_port = os.environ.get("ASD_NIM_HTTP_API_PORT", str(ASD_DEFAULTS["http_port"]))
     grpc_port = os.environ.get("ASD_GRPC_API_PORT", str(ASD_DEFAULTS["grpc_port"]))
-    cache_dir = os.environ.get("ASD_MODEL_MOUNT_PATH", ASD_DEFAULTS["cache_dir"])
-
-    Path(cache_dir).mkdir(parents=True, exist_ok=True)
+    cache_dir = nim_cache_dir("asd", "ASD_MODEL_MOUNT_PATH")
 
     env = {
         "NGC_API_KEY": api_key,

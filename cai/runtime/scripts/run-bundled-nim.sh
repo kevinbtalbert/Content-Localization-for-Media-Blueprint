@@ -12,8 +12,8 @@ if [[ ! -f "${entrypoint_file}" ]]; then
   exit 1
 fi
 
-cache_default="/var/lib/content-localization/models/${nim_type}"
-export NIM_CACHE_DIR="${NIM_CACHE_DIR:-${cache_default}}"
+cache_root="${CDSW_PROJECT_DIR:-/home/cdsw}/volumes/models/${nim_type}"
+export NIM_CACHE_DIR="${NIM_CACHE_DIR:-${cache_root}}"
 mkdir -p "${NIM_CACHE_DIR}"
 
 lib_paths=(
