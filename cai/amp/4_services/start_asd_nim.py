@@ -5,22 +5,27 @@ from __future__ import annotations
 
 import os
 import sys
+import traceback
 from pathlib import Path
 
-PROJECT_ROOT = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
+from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 from cai.lib.nim_runtime import (  # noqa: E402
     configure_asd_env,
-    exec_nim_server,
+    run_nim_server,
     start_endpoint_publisher,
 )
 
 
 def main() -> int:
     config = configure_asd_env()
-    print(f"ASD NIM image: {config['source_image']}")
-    print(f"Listening on gRPC :{config['grpc_port']}, HTTP :{config['http_port']}")
+    print(f"ASD NIM image: {config['source_image']}", flush=True)
+    print(f"NIM cache dir: {config['cache_dir']}", flush=True)
+    print(
+        f"Listening on gRPC :{config['grpc_port']}, HTTP :{config['http_port']}",
+        flush=True,
+    )
 
     start_endpoint_publisher(
         name=config["name"],
@@ -28,9 +33,14 @@ def main() -> int:
         grpc_port=config["grpc_port"],
         http_port=config["http_port"],
     )
-    exec_nim_server(config["nim_type"])
-    return 0
+    return run_nim_server(config["nim_type"])
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        run_amp_entry(main, __name__)
+    except SystemExit:
+        raise
+    except Exception:
+        traceback.print_exc()
+        raise SystemExit(1) from None

@@ -194,18 +194,29 @@ def configure_asd_env() -> dict[str, Any]:
     }
 
 
-def exec_nim_server(nim_type: str) -> None:
+def run_nim_server(nim_type: str) -> int:
+    """Start the bundled NIM via shell launcher (blocks until NIM exits)."""
+    bundle = nim_bundle_path(nim_type)
     if not nim_bundle_ready(nim_type):
         raise RuntimeError(
-            f"Bundled NIM server for '{nim_type}' is missing under {nim_bundle_path(nim_type)}. "
+            f"Bundled NIM server for '{nim_type}' is missing under {bundle}. "
             "Rebuild and re-register the ContentLocalization runtime image (see Dockerfile)."
         )
     if not RUN_BUNDLED_NIM.is_file():
         raise RuntimeError(f"Missing launcher script: {RUN_BUNDLED_NIM}")
 
+    entrypoint = (bundle / "entrypoint").read_text().strip()
     cmd = [str(RUN_BUNDLED_NIM), nim_type]
-    print(f"Starting bundled NIM: {' '.join(cmd)}")
-    os.execv(cmd[0], cmd)
+    print(f"Starting bundled NIM: {' '.join(cmd)}", flush=True)
+    print(f"  bundle={bundle}", flush=True)
+    print(f"  entrypoint={entrypoint}", flush=True)
+    print(f"  NIM_CACHE_DIR={os.environ.get('NIM_CACHE_DIR', '')}", flush=True)
+    return subprocess.call(cmd)
+
+
+def exec_nim_server(nim_type: str) -> None:
+    """Deprecated alias — prefer run_nim_server() for CAI application scripts."""
+    raise SystemExit(run_nim_server(nim_type))
 
 
 def write_nim_image_manifest() -> Path:

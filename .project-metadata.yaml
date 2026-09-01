@@ -65,7 +65,7 @@ tasks:
     name: LipSync NIM
     subdomain: cl-lipsync
     entity_label: lipsync-nim
-    script: cai/amp/4_services/start_lipsync_nim.py
+    script: cai/amp/4_services/launch_lipsync_nim.py
     short_summary: Start bundled LipSync NIM (ContentLocalization runtime, 1 GPU)
     kernel: python3
     cpu: 4
@@ -79,7 +79,7 @@ tasks:
     name: ASD NIM
     subdomain: cl-asd
     entity_label: asd-nim
-    script: cai/amp/4_services/start_asd_nim.py
+    script: cai/amp/4_services/launch_asd_nim.py
     short_summary: Start bundled ASD NIM (ContentLocalization runtime, 1 GPU)
     kernel: python3
     cpu: 4
