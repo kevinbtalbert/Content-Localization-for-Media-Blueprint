@@ -10,7 +10,6 @@ date: "2026-08-31"
 
 environment_variables:
   NGC_API_KEY:
-    required: true
     description: "NGC API key for NVIDIA NIM model access (plain string at AMP install)"
   S2S_SERVICE:
     default: "EL_DUBBING"
