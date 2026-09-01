@@ -41,16 +41,6 @@ def find_tool(name: str, extra_candidates: Optional[Iterable[str]] = None) -> Op
     return None
 
 
-def get_ngc_api_key() -> str:
-    """Return NGC credentials from project environment."""
-    return os.environ.get("NGC_API_KEY", "").strip()
-
-
-def get_elevenlabs_api_key() -> str:
-    """Return ElevenLabs API key from project environment."""
-    return os.environ.get("ELEVENLABS_API_KEY", "").strip()
-
-
 def runtime_hint(detail: str) -> str:
     return (
         f"{detail}. Project runtime should be "

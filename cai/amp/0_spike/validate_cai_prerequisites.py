@@ -23,8 +23,6 @@ from cai.lib.paths import PROJECT_ROOT, RAY_ROOT  # noqa: E402
 from cai.lib.prerequisite_checks import (  # noqa: E402
     CUSTOM_RUNTIME_EDITION,
     find_tool,
-    get_elevenlabs_api_key,
-    get_ngc_api_key,
     runtime_hint,
 )
 
@@ -51,23 +49,33 @@ def main() -> int:
     results.append(check("Project root exists", PROJECT_ROOT.exists(), str(PROJECT_ROOT)))
     results.append(check("Ray integration present", (RAY_ROOT / "cai_integration").exists()))
 
-    ngc_key = get_ngc_api_key()
+    ngc_key = os.environ.get("NGC_API_KEY", "").strip()
     results.append(
         check(
             "NGC_API_KEY set",
             bool(ngc_key),
-            f"{len(ngc_key)} chars" if ngc_key else "os.environ.get('NGC_API_KEY') is empty",
+            f"{len(ngc_key)} chars" if ngc_key else "set NGC_API_KEY at AMP Configure Project",
         )
     )
 
     s2s_service = os.environ.get("S2S_SERVICE", "EL_DUBBING")
     if s2s_service == "EL_DUBBING":
-        eleven_key = get_elevenlabs_api_key()
+        eleven_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
         results.append(
             check(
                 "ELEVENLABS_API_KEY set",
                 bool(eleven_key),
-                f"{len(eleven_key)} chars" if eleven_key else "os.environ.get('ELEVENLABS_API_KEY') is empty",
+                f"{len(eleven_key)} chars" if eleven_key else "set ELEVENLABS_API_KEY at AMP Configure Project",
+                required=False,
+            )
+        )
+    elif s2s_service == "CAMB_DUBBING":
+        camb_key = os.environ.get("CAMB_API_KEY", "").strip()
+        results.append(
+            check(
+                "CAMB_API_KEY set",
+                bool(camb_key),
+                f"{len(camb_key)} chars" if camb_key else "set CAMB_API_KEY at AMP Configure Project",
                 required=False,
             )
         )
@@ -152,7 +160,8 @@ def main() -> int:
         "grpcurl": grpcurl,
         "ngc_key_set": bool(ngc_key),
         "s2s_service": s2s_service,
-        "elevenlabs_key_set": bool(get_elevenlabs_api_key()) if s2s_service == "EL_DUBBING" else None,
+        "elevenlabs_key_set": bool(os.environ.get("ELEVENLABS_API_KEY", "").strip()) if s2s_service == "EL_DUBBING" else None,
+        "camb_key_set": bool(os.environ.get("CAMB_API_KEY", "").strip()) if s2s_service == "CAMB_DUBBING" else None,
         "gpu": report_gpu,
         "gpu_profile": gpu_profile.to_dict() if gpu_profile else None,
     }
@@ -173,8 +182,8 @@ def main() -> int:
         )
     if not ngc_key:
         print(
-            "\nTip: set NGC_API_KEY under Project Settings → Advanced → Environment, "
-            "click Submit, then start a new session."
+            "\nTip: set NGC_API_KEY in the AMP Configure Project screen before deploying, "
+            "or under Project Settings → Advanced → Environment."
         )
     return 1
 

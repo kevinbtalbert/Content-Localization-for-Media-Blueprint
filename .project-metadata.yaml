@@ -8,6 +8,12 @@ specification_version: 1.0
 prototype_version: 1.2
 date: "2026-08-31"
 
+runtimes:
+  - editor: JupyterLab
+    kernel: Python 3.13
+    edition: ContentLocalization
+    version: "1.2"
+
 environment_variables:
   NGC_API_KEY:
     default: ""
@@ -28,14 +34,16 @@ environment_variables:
     default: "de"
     description: "Default target dubbing language"
 
-runtimes:
-  # Single registered runtime — NIM servers are bundled in this image at build time.
-  - editor: JupyterLab
-    kernel: Python 3.13
-    edition: ContentLocalization
-    version: "1.2"
-
 tasks:
+  - type: run_session
+    name: Install Python Dependencies
+    script: cai/amp/1_install/install_dependencies.py
+    short_summary: Install blueprint Python deps and generate protobuf code
+    kernel: python3
+    cpu: 4
+    memory: 8
+    gpu: 1
+
   - type: run_session
     name: Validate CAI Prerequisites
     script: cai/amp/0_spike/validate_cai_prerequisites.py
@@ -44,14 +52,6 @@ tasks:
     cpu: 2
     memory: 4
     gpu: 1
-
-  - type: run_session
-    name: Install Python Dependencies
-    script: cai/amp/1_install/install_dependencies.py
-    short_summary: Install blueprint Python deps and generate protobuf code
-    kernel: python3
-    cpu: 4
-    memory: 8
 
   - type: run_session
     name: Record NIM Bundle Configuration
@@ -72,7 +72,7 @@ tasks:
     memory: 32
     gpu: 1
     shared_memory_limit: 4
-    environment_variables:
+    environment:
       TASK_TYPE: START_APPLICATION
 
   - type: start_application
@@ -86,7 +86,7 @@ tasks:
     memory: 32
     gpu: 1
     shared_memory_limit: 4
-    environment_variables:
+    environment:
       TASK_TYPE: START_APPLICATION
 
   - type: start_application
@@ -96,7 +96,7 @@ tasks:
     short_summary: Start S2S gRPC service (ElevenLabs or CambAI)
     cpu: 2
     memory: 4
-    environment_variables:
+    environment:
       TASK_TYPE: START_APPLICATION
 
   - type: run_session
@@ -114,7 +114,7 @@ tasks:
     short_summary: Start Controller gRPC orchestration service
     cpu: 4
     memory: 8
-    environment_variables:
+    environment:
       TASK_TYPE: START_APPLICATION
 
   - type: run_session
@@ -135,5 +135,5 @@ tasks:
       for external access to the demo subdomain.
     cpu: 2
     memory: 8
-    environment_variables:
+    environment:
       TASK_TYPE: START_APPLICATION

@@ -168,13 +168,13 @@ Rebuild the image after Dockerfile metadata changes so `ML_RUNTIME_*` labels mat
 ## AMP installation
 
 1. Add `catalog-entry.yaml` to your AMP catalog (or install from git URL).
-2. Install the AMP and provide environment variables at install time.
+2. Install the AMP and provide environment variables on the **Configure Project** screen (same pattern as [CML AMP RAG Monitoring](https://github.com/cloudera/CML_AMP_RAG_Monitoring): `default: ""` + `description` only — no `required`, no `null`).
 3. The AMP executes tasks defined in [`.project-metadata.yaml`](../.project-metadata.yaml).
 
 ### AMP task sequence
 
-1. Validate prerequisites (`cai/amp/0_spike/validate_cai_prerequisites.py`)
-2. Install Python deps + generate protos
+1. Install Python deps + generate protos (`cai/amp/1_install/install_dependencies.py`)
+2. Validate prerequisites (`cai/amp/0_spike/validate_cai_prerequisites.py`) — reads `os.environ["NGC_API_KEY"]` etc.
 3. Record NIM bundle configuration
 4. Start LipSync NIM GPU application (ContentLocalization runtime)
 5. Start ASD NIM GPU application (ContentLocalization runtime)

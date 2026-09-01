@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 from cai.lib.cai_common import merge_nim_endpoints
-from cai.lib.prerequisite_checks import get_ngc_api_key
 
 PROJECT_ROOT = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
 NIM_BUNDLE_ROOT = Path(os.environ.get("NIM_BUNDLE_ROOT", "/opt/nvidia-nim"))
@@ -122,7 +121,7 @@ def start_endpoint_publisher(
 
 
 def configure_lipsync_env() -> dict[str, Any]:
-    api_key = get_ngc_api_key()
+    api_key = os.environ.get("NGC_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("NGC_API_KEY must be set in project environment")
 
@@ -154,7 +153,7 @@ def configure_lipsync_env() -> dict[str, Any]:
 
 
 def configure_asd_env() -> dict[str, Any]:
-    api_key = get_ngc_api_key()
+    api_key = os.environ.get("NGC_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("NGC_API_KEY must be set in project environment")
 
@@ -223,7 +222,7 @@ def write_nim_image_manifest() -> Path:
 
 
 def validate_ngc_for_nim() -> str:
-    api_key = get_ngc_api_key()
+    api_key = os.environ.get("NGC_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError(
             "NGC_API_KEY must be set in AMP Configure Project or "
