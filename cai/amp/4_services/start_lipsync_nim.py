@@ -19,7 +19,7 @@ from cai.lib.nim_runtime import (  # noqa: E402
 
 def main() -> int:
     config = configure_lipsync_env()
-    print(f"LipSync NIM image: {config['image']}")
+    print(f"LipSync NIM image: {config['source_image']}")
     print(f"Listening on gRPC :{config['grpc_port']}, HTTP :{config['http_port']}")
 
     start_endpoint_publisher(
