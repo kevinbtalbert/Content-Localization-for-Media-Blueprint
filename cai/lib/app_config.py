@@ -1,4 +1,4 @@
-"""Application configuration entered via the demo Setup page and persisted on disk."""
+"""Application configuration entered via the Launchpad and persisted on disk."""
 
 from __future__ import annotations
 
@@ -166,6 +166,63 @@ class AppConfig:
         env = self.as_process_env()
         env["TASK_TYPE"] = "START_APPLICATION"
         return env
+
+    def validate_for_build(self) -> dict[str, Any]:
+        """Return {valid, errors, warnings} before starting a pipeline build."""
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        mode = self.nim_deploy_mode.upper()
+        if mode not in {"SERVERLESS", "BUNDLED"}:
+            errors.append(f"Invalid NIM deployment mode: {self.nim_deploy_mode}")
+
+        if not self.ngc_api_key.strip():
+            errors.append("NGC API key is required.")
+
+        if self.s2s_service == "EL_DUBBING":
+            if not self.elevenlabs_api_key.strip():
+                errors.append("ElevenLabs API key is required for ElevenLabs dubbing.")
+        elif self.s2s_service == "CAMB_DUBBING":
+            if not self.camb_api_key.strip():
+                errors.append("CambAI API key is required for CambAI dubbing.")
+        else:
+            errors.append(f"Unsupported S2S backend: {self.s2s_service}")
+
+        if not self.default_target_language.strip():
+            errors.append("Default target language is required.")
+        if not self.default_source_language.strip():
+            errors.append("Default source language is required.")
+
+        if mode == "BUNDLED" and not self.lipsync_nim_tags_selector.strip():
+            errors.append("LipSync language model (NIM_TAGS_SELECTOR) is required for bundled mode.")
+
+        port = self.nvidia_serverless_grpc_port.strip()
+        if port and not port.isdigit():
+            errors.append("NVCF gRPC port must be a number.")
+
+        if self.reference_app_enable_preprocessing and self.s2s_service == "EL_DUBBING":
+            if not self.elevenlabs_api_key.strip():
+                errors.append("ElevenLabs API key is required when preprocessing is enabled.")
+
+        if mode == "SERVERLESS":
+            warnings.append(
+                "Serverless mode uses NVIDIA NVCF for LipSync and ASD — no GPU NIM apps are created in this project."
+            )
+        else:
+            warnings.append(
+                "Bundled mode starts GPU NIM applications; LipSync and ASD can take 15–30+ minutes to become ready."
+            )
+
+        return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}
+
+
+def validate_merged_config(patch: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Validate saved config, optionally merged with unsaved form fields."""
+    existing = load_app_config()
+    config = AppConfig.merge_update(existing, patch or {}) if patch else existing
+    if config is None:
+        return {"valid": False, "errors": ["Save your configuration before building."], "warnings": []}
+    return config.validate_for_build()
 
 
 def load_app_config() -> AppConfig | None:

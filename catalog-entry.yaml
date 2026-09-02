@@ -5,7 +5,7 @@ entries:
     short_description: |
       End-to-end deployment of NVIDIA's Content Localization Blueprint on
       Cloudera AI Workbench with bundled LipSync/ASD NIM GPU applications, S2S dubbing,
-      and a Next.js demo UI.
+      and a Next.js Launchpad UI.
     long_description: |
       Requires the custom runtime **ContentLocalization** v1.2
       (build the repository root Dockerfile with NGC login for nvcr.io, then register).

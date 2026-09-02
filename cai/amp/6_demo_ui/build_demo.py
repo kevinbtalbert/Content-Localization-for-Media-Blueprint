@@ -25,7 +25,7 @@ def main() -> int:
         and next_dir.is_dir()
         and not os.environ.get("FORCE_DEMO_BUILD", "").strip()
     ):
-        print(f"✅ Demo UI already built ({dist}) — skipping npm build")
+        print(f"✅ Web UI already built ({dist}) — skipping npm build")
         print("   Set FORCE_DEMO_BUILD=1 to rebuild after code changes.")
         return 0
 
@@ -37,7 +37,7 @@ def main() -> int:
     ):
         print("Running:", " ".join(cmd))
         subprocess.run(cmd, check=True, env=env)
-    print("✅ Demo UI built")
+    print("✅ Web UI built")
     return 0
 
 

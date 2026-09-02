@@ -14,6 +14,8 @@ asd_nim.log
 controller_sidecar.log
 s2s_app_port.log
 controller_app_port.log
+build_progress.json
+build.lock
 deployment_config.json
 app_environment.env
 nim_deploy_mode.json

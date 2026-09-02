@@ -16,9 +16,9 @@ export default function ContentLocalization() {
       />
       <p className="mb-4 text-sm text-neutral-400">
         <a href="/demos/configure" className="text-[#76b900] underline">
-          Setup &amp; deployment
+          Launchpad
         </a>
-        {" — configure API keys and deploy services before running the pipeline."}
+        {" — configure and build the pipeline before processing video."}
       </p>
       <VideoUploadContainer />
     </div>

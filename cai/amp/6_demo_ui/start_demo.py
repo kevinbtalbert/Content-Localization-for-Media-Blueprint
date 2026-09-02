@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CML Application: Content Localization Next.js demo UI."""
+"""CML Application: Content Localization Launchpad (Next.js UI)."""
 
 from __future__ import annotations
 
@@ -41,8 +41,8 @@ def main() -> int:
 
     if not SERVER_JS.is_file():
         print(
-            f"ERROR: Demo server not built — missing {SERVER_JS}\n"
-            "Run the AMP step 'Build Demo UI' or set FORCE_DEMO_BUILD=1 and rebuild.",
+            f"ERROR: Web UI not built — missing {SERVER_JS}\n"
+            "Run the AMP step 'Build Web UI' or set FORCE_DEMO_BUILD=1 and rebuild.",
             flush=True,
         )
         return 1
@@ -53,7 +53,7 @@ def main() -> int:
         return 1
 
     os.chdir(DEMO_DIR)
-    print(f"Starting demo UI: {node} {SERVER_JS} on 127.0.0.1:{port}", flush=True)
+    print(f"Starting Launchpad UI: {node} {SERVER_JS} on 127.0.0.1:{port}", flush=True)
     os.execv(node, [node, str(SERVER_JS)])
 
 

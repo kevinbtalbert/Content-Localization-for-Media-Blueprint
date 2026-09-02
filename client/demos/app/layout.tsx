@@ -7,8 +7,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI4M Demos",
-  description: "NVIDIA AI4M Demos",
+  title: "Content Localization",
+  description: "NVIDIA Content Localization for Media",
 };
 
 const Layout = ({ children }: { children: React.ReactNode }) => {

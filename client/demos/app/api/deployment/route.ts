@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { promisify } from "util";
@@ -37,16 +37,58 @@ function pythonPath(): string {
   return "python3";
 }
 
+function controlPlaneScript(): string {
+  return path.join(projectRoot(), "cai/amp/7_deploy/control_plane_cli.py");
+}
+
 async function runControlPlane(command: string, extraArgs: string[] = []): Promise<unknown> {
   const root = projectRoot();
-  const script = path.join(root, "cai/amp/7_deploy/control_plane_cli.py");
-  const { stdout } = await execFileAsync(pythonPath(), [script, command, ...extraArgs], {
+  const { stdout } = await execFileAsync(pythonPath(), [controlPlaneScript(), command, ...extraArgs], {
     cwd: root,
     env: process.env,
     maxBuffer: 10 * 1024 * 1024,
-    timeout: 30 * 60 * 1000,
+    timeout: command === "build" || command === "deploy" ? 30 * 60 * 1000 : 120 * 1000,
   });
   return JSON.parse(stdout);
+}
+
+async function runControlPlaneAllowFailure(
+  command: string,
+  extraArgs: string[] = [],
+): Promise<{ ok: boolean; data: unknown; exitCode: number }> {
+  const root = projectRoot();
+  try {
+    const { stdout } = await execFileAsync(pythonPath(), [controlPlaneScript(), command, ...extraArgs], {
+      cwd: root,
+      env: process.env,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 120 * 1000,
+    });
+    return { ok: true, data: JSON.parse(stdout), exitCode: 0 };
+  } catch (error) {
+    const execError = error as { stdout?: string; code?: number };
+    const raw = execError.stdout?.trim();
+    let data: unknown = { error: "Validation failed" };
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = { error: raw };
+      }
+    }
+    return { ok: false, data, exitCode: execError.code ?? 1 };
+  }
+}
+
+function startBackgroundBuild(): void {
+  const root = projectRoot();
+  const child = spawn(pythonPath(), [controlPlaneScript(), "build"], {
+    cwd: root,
+    env: process.env,
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
 }
 
 export async function GET() {
@@ -54,7 +96,7 @@ export async function GET() {
     const status = await runControlPlane("status");
     return NextResponse.json(status);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load deployment status";
+    const message = error instanceof Error ? error.message : "Failed to load pipeline status";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -70,14 +112,38 @@ export async function POST(request: Request) {
       return NextResponse.json(result);
     }
 
-    if (action === "deploy") {
-      const result = await runControlPlane("deploy");
-      return NextResponse.json(result);
+    if (action === "validate") {
+      const configJson = JSON.stringify(body.config ?? {});
+      const result = await runControlPlaneAllowFailure("validate", ["--config-json", configJson]);
+      if (!result.ok) {
+        return NextResponse.json(result.data, { status: 400 });
+      }
+      return NextResponse.json(result.data);
+    }
+
+    if (action === "build" || action === "deploy") {
+      const configJson = body.config ? JSON.stringify(body.config) : "";
+      if (configJson) {
+        await runControlPlane("save-config", ["--config-json", configJson]);
+      }
+      const validation = await runControlPlaneAllowFailure(
+        "validate",
+        configJson ? ["--config-json", configJson] : [],
+      );
+      if (!validation.ok) {
+        return NextResponse.json(validation.data, { status: 400 });
+      }
+      startBackgroundBuild();
+      return NextResponse.json({
+        started: true,
+        message: "Pipeline build started. Stay on this page for live progress.",
+        validation: validation.data,
+      });
     }
 
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Deployment action failed";
+    const message = error instanceof Error ? error.message : "Pipeline action failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
