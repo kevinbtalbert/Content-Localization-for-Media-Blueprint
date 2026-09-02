@@ -13,6 +13,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
 from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
+from cai.lib.deploy_mode import (  # noqa: E402
+    deploy_mode_label,
+    is_serverless_nim_mode,
+    validate_serverless_config,
+    write_deploy_mode_report,
+)
 from cai.lib.gpu_config import detect_gpu_profile, save_gpu_profile  # noqa: E402
 from cai.lib.nim_runtime import (  # noqa: E402
     NIM_BUNDLE_ROOT,
@@ -41,9 +47,11 @@ def main() -> int:
     print("=" * 70)
     print(f"Expected runtime edition: {CUSTOM_RUNTIME_EDITION}")
     print(f"ML_RUNTIME_EDITION: {os.environ.get('ML_RUNTIME_EDITION', '(not set)')}")
-    print("Deployment model: bundled NIM GPU apps (ContentLocalization runtime)")
+    print(f"Deployment model: {deploy_mode_label()}")
     print()
 
+    write_deploy_mode_report()
+    serverless = is_serverless_nim_mode()
     results: list[bool] = []
 
     results.append(check("Project root exists", PROJECT_ROOT.exists(), str(PROJECT_ROOT)))
@@ -103,7 +111,14 @@ def main() -> int:
 
     gpu_proc = subprocess.run(["nvidia-smi", "-L"], capture_output=True, text=True)
     gpu_visible = gpu_proc.returncode == 0
-    results.append(check("NVIDIA GPU visible", gpu_visible, gpu_proc.stdout.strip()[:120]))
+    results.append(
+        check(
+            "NVIDIA GPU visible",
+            gpu_visible,
+            gpu_proc.stdout.strip()[:120],
+            required=not serverless,
+        )
+    )
 
     gpu_profile = detect_gpu_profile() if gpu_visible else None
     if gpu_profile:
@@ -116,6 +131,16 @@ def main() -> int:
             )
         )
         report_gpu = gpu_profile.gpu_name
+    elif serverless:
+        results.append(
+            check(
+                "GPU profile detected",
+                True,
+                "not required for serverless NIM mode",
+                required=False,
+            )
+        )
+        report_gpu = "not required (serverless)"
     else:
         results.append(
             check(
@@ -126,7 +151,10 @@ def main() -> int:
         )
         report_gpu = gpu_proc.stdout.strip() if gpu_visible else gpu_proc.stderr.strip()
 
-    if ngc_key:
+    if serverless:
+        for label, ok, detail, required in validate_serverless_config():
+            results.append(check(label, ok, detail, required=required))
+    elif ngc_key:
         manifest_path = write_nim_image_manifest()
         results.append(
             check(
@@ -154,7 +182,7 @@ def main() -> int:
         "project_root": str(PROJECT_ROOT),
         "runtime_edition": os.environ.get("ML_RUNTIME_EDITION"),
         "expected_runtime_edition": CUSTOM_RUNTIME_EDITION,
-        "deployment_model": "bundled_nim_in_contentlocalization_runtime",
+        "deployment_model": "serverless_nvcf" if serverless else "bundled_nim_in_contentlocalization_runtime",
         "docker_socket_required": False,
         "node": node_ver,
         "grpcurl": grpcurl,

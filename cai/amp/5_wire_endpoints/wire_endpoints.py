@@ -13,6 +13,12 @@ sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
 from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 from cai.lib.cai_common import write_dotenv_file  # noqa: E402
+from cai.lib.deploy_mode import (  # noqa: E402
+    deploy_mode_label,
+    is_serverless_nim_mode,
+    serverless_runtime_endpoints,
+    write_serverless_nim_endpoints_json,
+)
 from cai.lib.paths import ENDPOINTS_ENV, NIM_ENDPOINTS_JSON, PROJECT_ROOT  # noqa: E402
 from cai.lib.service_env import load_config_defaults  # noqa: E402
 
@@ -45,9 +51,29 @@ def _wait_for_nim_endpoints(timeout_s: int = 1200) -> None:
     )
 
 
-def main() -> int:
-    load_config_defaults()
+def _wire_serverless() -> int:
+    print(f"Deployment model: {deploy_mode_label()}")
+    print("Waiting for Speech-to-Speech application to publish endpoint metadata...")
+    _wait_for_file(S2S_ENDPOINT)
 
+    s2s_data = json.loads(S2S_ENDPOINT.read_text())
+    nim_path = write_serverless_nim_endpoints_json()
+    print(f"Wrote serverless NIM metadata: {nim_path}")
+
+    endpoints = serverless_runtime_endpoints()
+    endpoints["S2S_SERVER"] = s2s_data.get(
+        "grpc_address", f"{s2s_data['host']}:{s2s_data['port']}"
+    )
+
+    write_dotenv_file(ENDPOINTS_ENV, endpoints)
+    print("Wrote runtime endpoints (serverless LipSync/ASD via NVCF):")
+    for key, value in endpoints.items():
+        print(f"  {key}={value}")
+    return 0
+
+
+def _wire_bundled() -> int:
+    print(f"Deployment model: {deploy_mode_label()}")
     print("Waiting for NIM GPU applications to publish endpoint metadata...")
     _wait_for_nim_endpoints()
     _wait_for_file(S2S_ENDPOINT)
@@ -62,6 +88,7 @@ def main() -> int:
         "S2S_SERVER": s2s_data.get("grpc_address", f"{s2s_data['host']}:{s2s_data['port']}"),
         "LIPSYNC_SERVER": lipsync.get("grpc_address", f"{lipsync.get('host')}:{lipsync.get('grpc_port')}"),
         "ASD_SERVER": asd.get("grpc_address", f"{asd.get('host')}:{asd.get('grpc_port')}"),
+        "NIM_DEPLOY_MODE": "BUNDLED",
     }
 
     write_dotenv_file(ENDPOINTS_ENV, endpoints)
@@ -69,6 +96,13 @@ def main() -> int:
     for key, value in endpoints.items():
         print(f"  {key}={value}")
     return 0
+
+
+def main() -> int:
+    load_config_defaults()
+    if is_serverless_nim_mode():
+        return _wire_serverless()
+    return _wire_bundled()
 
 
 run_amp_entry(main, __name__)

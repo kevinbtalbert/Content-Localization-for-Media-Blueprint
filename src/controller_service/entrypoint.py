@@ -4,6 +4,7 @@
 """Controller service gRPC entrypoint."""
 
 import argparse
+import os
 import sys
 
 import grpc
@@ -13,8 +14,21 @@ from common.handles import GRPCServiceHandle
 from common.nims import ActiveSpeakerDetectionHandle
 from common.nims import LipsyncHandle
 from common.nims import SpeechToSpeechHandle
+from common.nvcf import asd_nvcf_function_id
+from common.nvcf import lipsync_nvcf_function_id
+from common.nvcf import nvcf_grpc_metadata
 from common.tls import create_channel_credentials
 from controller_service.service import ControllerService
+
+
+def _nvcf_call_metadata(function_id: str, *, service_label: str) -> tuple[tuple[str, str], ...] | None:
+    """Build NVCF metadata when a resolved function ID is available."""
+    if not function_id:
+        return None
+    api_key = os.environ.get("NGC_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(f"{service_label} NVCF function ID is configured but NGC_API_KEY is missing")
+    return nvcf_grpc_metadata(api_key, function_id)
 
 
 def _nim_channel_credentials(
@@ -116,6 +130,10 @@ def main() -> None:
             host=lipsync_server.host,
             port=lipsync_server.port,
             channel_credentials=lipsync_credentials,
+            call_metadata=_nvcf_call_metadata(
+                lipsync_nvcf_function_id(),
+                service_label="LipSync",
+            ),
         )
         s2s_nim = None
         if s2s_server is not None:
@@ -138,6 +156,10 @@ def main() -> None:
                 channel_credentials=_nim_channel_credentials(
                     args=args,
                     ssl_mode=args.asd_ssl_mode or args.ssl_mode,
+                    service_label="ASD",
+                ),
+                call_metadata=_nvcf_call_metadata(
+                    asd_nvcf_function_id(),
                     service_label="ASD",
                 ),
             )

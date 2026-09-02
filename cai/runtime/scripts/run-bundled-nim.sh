@@ -44,7 +44,20 @@ if [[ -d "${bundle_root}/usr/local/bin" ]]; then
 fi
 
 entrypoint="$(tr -d '\n' <"${entrypoint_file}")"
+if [[ ! -e "${entrypoint}" ]]; then
+  echo "ERROR: NIM entrypoint not found: ${entrypoint}" >&2
+  exit 1
+fi
+if [[ ! -x "${entrypoint}" ]]; then
+  chmod +x "${entrypoint}" 2>/dev/null || true
+fi
+
 echo "Starting bundled ${nim_type} NIM: ${entrypoint}"
 echo "  NIM_CACHE_PATH=${NIM_CACHE_PATH}"
 echo "  NIM_CACHE_DIR=${NIM_CACHE_DIR}"
+echo "  NGC_API_KEY set: $([ -n "${NGC_API_KEY:-}" ] && echo yes || echo NO)"
+echo "  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-unset}"
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi -L || true
+fi
 exec "${entrypoint}"

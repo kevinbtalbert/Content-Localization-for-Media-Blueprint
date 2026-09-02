@@ -7,7 +7,12 @@ phase0_report.json
 gpu_profile.json
 lipsync_nim.env
 asd_nim.env
-s2s_sidecar.log
+lipsync_sidecar.log
+asd_sidecar.log
+lipsync_nim.log
+asd_nim.log
 controller_sidecar.log
 s2s_app_port.log
 controller_app_port.log
+deployment_config.json
+nim_deploy_mode.json

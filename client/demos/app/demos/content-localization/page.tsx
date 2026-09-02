@@ -14,6 +14,12 @@ export default function ContentLocalization() {
         title="Content Localization"
         description="Localize your content with translation, voice-cloned dubbing and lipsync."
       />
+      <p className="mb-4 text-sm text-neutral-400">
+        <a href="/demos/configure" className="text-[#76b900] underline">
+          Setup &amp; deployment
+        </a>
+        {" — configure API keys and deploy services before running the pipeline."}
+      </p>
       <VideoUploadContainer />
     </div>
   );

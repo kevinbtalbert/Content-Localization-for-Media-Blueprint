@@ -5,6 +5,20 @@ set -euo pipefail
 project="${CDSW_PROJECT_DIR:-/home/cdsw}"
 cd "${project}"
 
+nim_log="${project}/cai/config/asd_nim.log"
+mkdir -p "${project}/cai/config"
+exec > >(tee -a "${nim_log}") 2>&1
+echo "=== ASD NIM launcher $(date -Iseconds) ==="
+echo "Engine type: ${CDSW_ENGINE_TYPE:-unknown}  Pod IP: ${CDSW_IP_ADDRESS:-unknown}"
+echo "Application log mirror: ${nim_log}"
+
+if ! nvidia-smi -L >/dev/null 2>&1; then
+  echo "ERROR: GPU not visible in this application (nvidia-smi failed)." >&2
+  echo "Ensure the app requests 1 GPU and Spark/add-ons are disabled." >&2
+  exit 1
+fi
+nvidia-smi -L || true
+
 python3 - <<'PY'
 import os
 import sys
@@ -24,11 +38,20 @@ print(
     "First start may take 15–120+ minutes while NIM downloads model weights from NGC.",
     flush=True,
 )
+print(
+    "Progress: du -sh volumes/models/asd  |  sidecar: cai/config/asd_sidecar.log",
+    flush=True,
+)
 PY
 
 # shellcheck source=/dev/null
 source "${project}/cai/config/asd_nim.env"
 unset ASD_MODEL_MOUNT_PATH
+
+if [[ -z "${NGC_API_KEY:-}" ]]; then
+  echo "ERROR: NGC_API_KEY is empty after sourcing asd_nim.env" >&2
+  exit 1
+fi
 
 app_port="${CDSW_APP_PORT:-8100}"
 sidecar_log="${project}/cai/config/asd_sidecar.log"
@@ -58,4 +81,5 @@ if [[ ! -f "${launcher}" ]]; then
   launcher="/usr/local/bin/run-bundled-nim"
 fi
 chmod +x "${launcher}" 2>/dev/null || true
+echo "Exec bundled NIM launcher: ${launcher} asd"
 exec "${launcher}" asd

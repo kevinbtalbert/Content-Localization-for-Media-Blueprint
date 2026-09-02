@@ -52,6 +52,7 @@ class GRPCInferenceHandle(GRPCServiceHandle, ABC):
         stub_class: Any,
         health_check_service: str = "",
         channel_credentials: grpc.ChannelCredentials | None = None,
+        call_metadata: tuple[tuple[str, str], ...] | None = None,
     ) -> None:
         """Initialize the GRPCInferenceHandle.
 
@@ -64,6 +65,9 @@ class GRPCInferenceHandle(GRPCServiceHandle, ABC):
             channel_credentials (grpc.ChannelCredentials | None):
                 Optional credentials for secure channels.
                 Defaults to ``None``.
+            call_metadata (tuple[tuple[str, str], ...] | None):
+                Optional gRPC metadata attached to every RPC (e.g. NVCF
+                ``authorization`` and ``function-id`` headers).
         """
         super().__init__(
             host=host,
@@ -72,6 +76,7 @@ class GRPCInferenceHandle(GRPCServiceHandle, ABC):
             channel_credentials=channel_credentials,
         )
 
+        self.call_metadata = call_metadata
         self.stub_class = stub_class
         self.stub = None
         self.channel = None
@@ -127,6 +132,10 @@ class GRPCInferenceHandle(GRPCServiceHandle, ABC):
             self.channel = grpc.insecure_channel(
                 target=f"{self.host}:{self.port}", options=channel_options
             )
+        if self.call_metadata:
+            from common.nvcf import intercept_channel_with_metadata
+
+            self.channel = intercept_channel_with_metadata(self.channel, self.call_metadata)
         self.stub = self.stub_class(self.channel)
         logger.debug(f"Channel opened with stub: {self.stub_class.__name__}")
 

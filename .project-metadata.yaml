@@ -1,8 +1,9 @@
 name: Content Localization for Media
 description: |
-  Deploy NVIDIA's Content Localization Blueprint on Cloudera AI Workbench with
-  bundled LipSync/ASD NIM GPU applications, ElevenLabs/CambAI speech-to-speech
-  dubbing, and the Next.js demo UI — single ContentLocalization runtime.
+  Deploy the Content Localization demo on Cloudera AI Workbench. AMP installs
+  dependencies and starts the web UI only — use the in-app Setup page to choose
+  serverless NVIDIA APIs or bundled GPU NIMs and deploy S2S, NIMs, and Controller
+  via CML API.
 author: Cloudera
 specification_version: 1.0
 prototype_version: 1.2
@@ -15,24 +16,29 @@ runtimes:
     version: "1.2"
 
 environment_variables:
+  RUNTIME_IDENTIFIER:
+    default: ""
+    description: |
+      Docker image for applications created from the Setup page (usually the same
+      ContentLocalization runtime image as this project). Required for in-app deploy.
   NGC_API_KEY:
     default: ""
-    description: "NGC API key for NVIDIA NIM model access (set at AMP install)"
+    description: "Optional default NGC key — prefer configuring in the demo Setup page"
   S2S_SERVICE:
     default: "EL_DUBBING"
-    description: "Speech-to-Speech backend: EL_DUBBING (ElevenLabs) or CAMB_DUBBING (CambAI)"
+    description: "Default S2S backend (overridden by Setup page)"
   ELEVENLABS_API_KEY:
     default: ""
-    description: "ElevenLabs API key (required when S2S_SERVICE=EL_DUBBING)"
+    description: "ElevenLabs key (prefer Setup page)"
   CAMB_API_KEY:
     default: ""
-    description: "CambAI API key (required when S2S_SERVICE=CAMB_DUBBING)"
+    description: "CambAI key (prefer Setup page)"
   LIPSYNC_NIM_TAGS_SELECTOR:
     default: "language=de"
-    description: "NIM_TAGS_SELECTOR for LipSync language model"
+    description: "LipSync language model when deploying bundled NIMs"
   S2S_DEFAULT_TARGET_LANGUAGE:
     default: "de"
-    description: "Default target dubbing language"
+    description: "Default dubbing target language"
 
 tasks:
   - type: run_session
@@ -42,80 +48,6 @@ tasks:
     kernel: python3
     cpu: 4
     memory: 8
-    gpu: 1
-
-  - type: run_session
-    name: Validate CAI Prerequisites
-    script: cai/amp/0_spike/validate_cai_prerequisites.py
-    short_summary: Run Phase-0 checks (GPU, NGC key, bundled NIMs)
-    kernel: python3
-    cpu: 2
-    memory: 4
-    gpu: 1
-
-  - type: run_session
-    name: Record NIM Bundle Configuration
-    script: cai/amp/1_install/record_nim_images.py
-    short_summary: Validate NGC key and record bundled NIM metadata
-    kernel: python3
-    cpu: 2
-    memory: 4
-
-  - type: start_application
-    name: LipSync NIM
-    subdomain: cl-lipsync
-    entity_label: lipsync-nim
-    script: cai/amp/4_services/launch_lipsync_nim.py
-    short_summary: Start bundled LipSync NIM (ContentLocalization runtime, 1 GPU)
-    kernel: python3
-    cpu: 4
-    memory: 32
-    gpu: 1
-    shared_memory_limit: 4
-    environment:
-      TASK_TYPE: START_APPLICATION
-
-  - type: start_application
-    name: ASD NIM
-    subdomain: cl-asd
-    entity_label: asd-nim
-    script: cai/amp/4_services/launch_asd_nim.py
-    short_summary: Start bundled ASD NIM (ContentLocalization runtime, 1 GPU)
-    kernel: python3
-    cpu: 4
-    memory: 32
-    gpu: 1
-    shared_memory_limit: 4
-    environment:
-      TASK_TYPE: START_APPLICATION
-
-  - type: start_application
-    name: Speech-to-Speech Service
-    subdomain: cl-s2s
-    script: cai/amp/4_services/launch_s2s.py
-    short_summary: Start S2S gRPC service (ElevenLabs or CambAI)
-    cpu: 2
-    memory: 4
-    environment:
-      TASK_TYPE: START_APPLICATION
-
-  - type: run_session
-    name: Wire Service Endpoints
-    script: cai/amp/5_wire_endpoints/wire_endpoints.py
-    short_summary: Write runtime_endpoints.env from NIM and S2S metadata
-    kernel: python3
-    cpu: 2
-    memory: 2
-
-  - type: start_application
-    name: Controller Service
-    subdomain: cl-controller
-    script: cai/amp/4_services/launch_controller.py
-    short_summary: Start Controller gRPC orchestration service
-    cpu: 4
-    memory: 8
-    environment:
-      TASK_TYPE: START_APPLICATION
 
   - type: run_session
     name: Build Demo UI
@@ -129,9 +61,10 @@ tasks:
     name: Content Localization Demo UI
     subdomain: content-localization-ui
     script: cai/amp/6_demo_ui/start_demo.py
-    short_summary: Start Next.js demo UI
+    short_summary: Start web UI with Setup & Deployment page
     long_summary: |
-      Start the Content Localization web UI. Enable unauthenticated app access
+      Start the Content Localization web UI. Open the Setup page to deploy
+      serverless or bundled NIM services. Enable unauthenticated app access
       for external access to the demo subdomain.
     cpu: 2
     memory: 8

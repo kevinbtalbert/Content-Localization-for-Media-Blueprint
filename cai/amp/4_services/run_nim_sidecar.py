@@ -56,8 +56,18 @@ def _serve_app_port(port: int, nim_http_port: int) -> None:
 
 
 def _publish_after_health(*, name: str, nim_type: str, grpc_port: int, http_port: int) -> None:
-    print(f"Waiting for {nim_type} NIM health on http://127.0.0.1:{http_port}/v1/health/ready ...", flush=True)
-    wait_for_nim_health(http_port, timeout_s=7200)
+    url = f"http://127.0.0.1:{http_port}/v1/health/ready"
+    print(f"Waiting for {nim_type} NIM health on {url} (publishes nim_endpoints.json when ready) ...", flush=True)
+    while True:
+        try:
+            wait_for_nim_health(http_port, timeout_s=300)
+            break
+        except TimeoutError:
+            print(
+                f"{nim_type} NIM not ready yet (no listener on :{http_port}); rechecking in 30s ...",
+                flush=True,
+            )
+            time.sleep(30)
     data = publish_nim_endpoint(name=name, nim_type=nim_type, grpc_port=grpc_port, http_port=http_port)
     print(f"Published NIM endpoint metadata for {nim_type}: {json.dumps(data[nim_type])}", flush=True)
 

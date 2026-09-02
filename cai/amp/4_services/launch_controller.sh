@@ -60,4 +60,6 @@ exec "${python}" "${project}/src/controller_service/entrypoint.py" \
   --threads-per-process "${CONTROLLER_GRPC_THREADS_PER_PROCESS:-1}" \
   --s2s-server "${S2S_SERVER:?S2S_SERVER must be set — run Wire Service Endpoints first}" \
   --lipsync-server "${LIPSYNC_SERVER:?LIPSYNC_SERVER must be set — run Wire Service Endpoints first}" \
+  --lipsync-ssl-mode "${CONTROLLER_LIPSYNC_SSL_MODE:-DISABLED}" \
+  --asd-ssl-mode "${CONTROLLER_ASD_SSL_MODE:-DISABLED}" \
   ${ASD_SERVER:+--asd-server "${ASD_SERVER}"}

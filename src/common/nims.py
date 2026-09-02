@@ -38,6 +38,7 @@ class SpeechToSpeechHandle(GRPCInferenceHandle):
         port: int,
         health_check_service: str = "",
         channel_credentials: grpc.ChannelCredentials | None = None,
+        call_metadata: tuple[tuple[str, str], ...] | None = None,
     ) -> None:
         """Initialize the SpeechToSpeechHandle.
 
@@ -52,6 +53,7 @@ class SpeechToSpeechHandle(GRPCInferenceHandle):
             health_check_service=health_check_service,
             stub_class=SpeechToSpeechStub,
             channel_credentials=channel_credentials,
+            call_metadata=call_metadata,
         )
 
     def get_response_iterator(
@@ -75,6 +77,7 @@ class ActiveSpeakerDetectionHandle(GRPCInferenceHandle):
         port: int,
         health_check_service: str = "",
         channel_credentials: grpc.ChannelCredentials | None = None,
+        call_metadata: tuple[tuple[str, str], ...] | None = None,
     ) -> None:
         """Initialize the ActiveSpeakerDetectionHandle.
 
@@ -89,6 +92,7 @@ class ActiveSpeakerDetectionHandle(GRPCInferenceHandle):
             health_check_service=health_check_service,
             stub_class=ActiveSpeakerDetectionServiceStub,
             channel_credentials=channel_credentials,
+            call_metadata=call_metadata,
         )
 
     def get_response_iterator(
@@ -111,6 +115,7 @@ class LipsyncHandle(GRPCInferenceHandle):
         port: int,
         health_check_service: str = "",
         channel_credentials: grpc.ChannelCredentials | None = None,
+        call_metadata: tuple[tuple[str, str], ...] | None = None,
     ) -> None:
         """Initialize the LipsyncHandle.
 
@@ -125,6 +130,7 @@ class LipsyncHandle(GRPCInferenceHandle):
             health_check_service=health_check_service,
             stub_class=LipSyncServiceStub,
             channel_credentials=channel_credentials,
+            call_metadata=call_metadata,
         )
 
     def get_response_iterator(
