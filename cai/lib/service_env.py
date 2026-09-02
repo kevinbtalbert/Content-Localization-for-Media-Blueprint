@@ -22,7 +22,14 @@ def configure_python_env() -> None:
 
 
 def load_config_defaults() -> None:
-    """Load elevenlabs.env or camb.env based on S2S_SERVICE."""
+    """Load persisted Setup config, then optional configs/*.env fallbacks."""
+    try:
+        from cai.lib.app_config import apply_persisted_config
+
+        apply_persisted_config()
+    except Exception:
+        pass
+
     service = os.environ.get("S2S_SERVICE", "EL_DUBBING")
     config_file = PROJECT_ROOT / "configs" / (
         "camb.env" if service == "CAMB_DUBBING" else "elevenlabs.env"

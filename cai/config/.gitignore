@@ -15,4 +15,6 @@ controller_sidecar.log
 s2s_app_port.log
 controller_app_port.log
 deployment_config.json
+app_environment.env
 nim_deploy_mode.json
+runtime_context.json

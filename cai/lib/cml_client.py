@@ -8,6 +8,8 @@ from typing import Any
 
 import requests
 
+from cai.lib.runtime_env import get_runtime_identifier
+
 
 @dataclass
 class ApplicationInfo:
@@ -43,33 +45,6 @@ def api_key() -> str:
     if not key:
         raise RuntimeError("CDSW_APIV2_KEY / CML_API_KEY not set")
     return key
-
-
-def runtime_identifier(client: CMLClient | None = None) -> str:
-    for env_var in (
-        "RUNTIME_IDENTIFIER",
-        "ML_RUNTIME_IMAGE",
-        "CDSW_RUNTIME_IMAGE",
-        "HEAD_RUNTIME_IDENTIFIER",
-    ):
-        value = os.environ.get(env_var, "").strip()
-        if value:
-            return value
-
-    app_id = os.environ.get("CDSW_APP_ID") or os.environ.get("CML_APPLICATION_ID")
-    if app_id:
-        cml = client or CMLClient()
-        app = cml.get_application(app_id)
-        for key in ("runtime_identifier", "runtime", "kernel"):
-            value = str(app.metadata.get(key, "")).strip()
-            if value and ("/" in value or ":" in value):
-                return value
-
-    raise RuntimeError(
-        "Could not resolve runtime image for new applications. "
-        "Set RUNTIME_IDENTIFIER to your ContentLocalization runtime docker image "
-        "(same image as this demo application)."
-    )
 
 
 class CMLClient:
@@ -156,7 +131,7 @@ class CMLClient:
         )
 
     def resolve_runtime(self) -> str:
-        return runtime_identifier(self)
+        return get_runtime_identifier()
 
     def get_application(self, app_id: str, project: str | None = None) -> ApplicationInfo:
         pid = project or project_id()

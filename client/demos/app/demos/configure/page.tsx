@@ -20,8 +20,16 @@ type ServiceStatus = {
   application: { id: string; status: string; subdomain: string | null } | null;
 };
 
+type SecretsSet = {
+  ngc_api_key?: boolean;
+  elevenlabs_api_key?: boolean;
+  camb_api_key?: boolean;
+};
+
 type DeploymentStatus = {
-  config: Record<string, string> | null;
+  config_saved: boolean;
+  config: Record<string, string | boolean> | null;
+  secrets_set: SecretsSet;
   nim_deploy_mode: string | null;
   services: Record<string, ServiceStatus>;
   endpoints_ready: boolean;
@@ -30,16 +38,45 @@ type DeploymentStatus = {
   error?: string;
 };
 
-const defaultForm = {
-  nim_deploy_mode: "SERVERLESS" as NimDeployMode,
-  s2s_service: "EL_DUBBING" as S2sService,
+type SetupForm = {
+  nim_deploy_mode: NimDeployMode;
+  s2s_service: S2sService;
+  ngc_api_key: string;
+  elevenlabs_api_key: string;
+  camb_api_key: string;
+  lipsync_nim_tags_selector: string;
+  s2s_default_target_language: string;
+  default_source_language: string;
+  default_target_language: string;
+  lipsync_nvidia_function_id: string;
+  asd_nvidia_function_id: string;
+  nvidia_serverless_grpc_host: string;
+  nvidia_serverless_grpc_port: string;
+  reference_app_enable_preprocessing: boolean;
+  voice_name: string;
+  target_language_label: string;
+};
+
+const defaultForm: SetupForm = {
+  nim_deploy_mode: "SERVERLESS",
+  s2s_service: "EL_DUBBING",
   ngc_api_key: "",
   elevenlabs_api_key: "",
   camb_api_key: "",
   lipsync_nim_tags_selector: "language=de",
   s2s_default_target_language: "de",
+  default_source_language: "auto",
+  default_target_language: "de",
   lipsync_nvidia_function_id: "",
+  asd_nvidia_function_id: "",
+  nvidia_serverless_grpc_host: "grpc.nvcf.nvidia.com",
+  nvidia_serverless_grpc_port: "443",
+  reference_app_enable_preprocessing: false,
+  voice_name: "",
+  target_language_label: "",
 };
+
+const inputClass = "rounded border border-neutral-600 bg-neutral-900 px-3 py-2";
 
 export default function ConfigurePage() {
   const [status, setStatus] = useState<DeploymentStatus | null>(null);
@@ -48,6 +85,7 @@ export default function ConfigurePage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -64,10 +102,21 @@ export default function ConfigurePage() {
           ...prev,
           nim_deploy_mode: (data.config.nim_deploy_mode as NimDeployMode) || prev.nim_deploy_mode,
           s2s_service: (data.config.s2s_service as S2sService) || prev.s2s_service,
-          lipsync_nim_tags_selector: data.config.lipsync_nim_tags_selector || prev.lipsync_nim_tags_selector,
-          s2s_default_target_language:
+          lipsync_nim_tags_selector: String(data.config.lipsync_nim_tags_selector || prev.lipsync_nim_tags_selector),
+          s2s_default_target_language: String(
             data.config.s2s_default_target_language || prev.s2s_default_target_language,
-          lipsync_nvidia_function_id: data.config.lipsync_nvidia_function_id || "",
+          ),
+          default_source_language: String(data.config.default_source_language || prev.default_source_language),
+          default_target_language: String(data.config.default_target_language || prev.default_target_language),
+          lipsync_nvidia_function_id: String(data.config.lipsync_nvidia_function_id || ""),
+          asd_nvidia_function_id: String(data.config.asd_nvidia_function_id || ""),
+          nvidia_serverless_grpc_host: String(
+            data.config.nvidia_serverless_grpc_host || prev.nvidia_serverless_grpc_host,
+          ),
+          nvidia_serverless_grpc_port: String(data.config.nvidia_serverless_grpc_port || prev.nvidia_serverless_grpc_port),
+          reference_app_enable_preprocessing: Boolean(data.config.reference_app_enable_preprocessing),
+          voice_name: String(data.config.voice_name || ""),
+          target_language_label: String(data.config.target_language_label || ""),
         }));
       }
     } catch (err) {
@@ -86,16 +135,20 @@ export default function ConfigurePage() {
     setMessage(null);
     setError(null);
     try {
+      const payload = {
+        ...form,
+        s2s_default_target_language: form.default_target_language,
+      };
       const response = await fetch("/api/deployment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save-config", config: form }),
+        body: JSON.stringify({ action: "save-config", config: payload }),
       });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Failed to save configuration");
       }
-      setMessage("Configuration saved.");
+      setMessage("Configuration saved. Settings persist across app restarts.");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save configuration");
@@ -128,11 +181,18 @@ export default function ConfigurePage() {
     }
   };
 
+  const secretPlaceholder = (key: keyof SecretsSet, label: string) => {
+    if (status?.secrets_set?.[key]) {
+      return `${label} saved (leave blank to keep)`;
+    }
+    return `Required — ${label}`;
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <Header
         title="Setup & Deployment"
-        description="Choose serverless NVIDIA APIs or deploy GPU NIM applications, then start the pipeline from this page."
+        description="Configure API keys, languages, and deployment mode here. Settings are saved to the project and restored when the app restarts."
       />
 
       {loading && (
@@ -180,21 +240,21 @@ export default function ConfigurePage() {
           </Card>
 
           <Card padding="p-6" className="flex flex-col gap-4">
-            <h3 className="text-lg font-semibold">API keys & settings</h3>
+            <h3 className="text-lg font-semibold">API keys</h3>
             <label className="flex flex-col gap-1 text-sm">
               NGC API key
               <input
-                className="rounded border border-neutral-600 bg-neutral-900 px-3 py-2"
+                className={inputClass}
                 type="password"
                 value={form.ngc_api_key}
                 onChange={(e) => setForm({ ...form, ngc_api_key: e.target.value })}
-                placeholder={status?.config?.ngc_api_key ? "Saved (enter to replace)" : "Required"}
+                placeholder={secretPlaceholder("ngc_api_key", "NGC key")}
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
               S2S backend
               <select
-                className="rounded border border-neutral-600 bg-neutral-900 px-3 py-2"
+                className={inputClass}
                 value={form.s2s_service}
                 onChange={(e) => setForm({ ...form, s2s_service: e.target.value as S2sService })}
               >
@@ -206,10 +266,11 @@ export default function ConfigurePage() {
               <label className="flex flex-col gap-1 text-sm">
                 ElevenLabs API key
                 <input
-                  className="rounded border border-neutral-600 bg-neutral-900 px-3 py-2"
+                  className={inputClass}
                   type="password"
                   value={form.elevenlabs_api_key}
                   onChange={(e) => setForm({ ...form, elevenlabs_api_key: e.target.value })}
+                  placeholder={secretPlaceholder("elevenlabs_api_key", "ElevenLabs key")}
                 />
               </label>
             )}
@@ -217,33 +278,123 @@ export default function ConfigurePage() {
               <label className="flex flex-col gap-1 text-sm">
                 CambAI API key
                 <input
-                  className="rounded border border-neutral-600 bg-neutral-900 px-3 py-2"
+                  className={inputClass}
                   type="password"
                   value={form.camb_api_key}
                   onChange={(e) => setForm({ ...form, camb_api_key: e.target.value })}
+                  placeholder={secretPlaceholder("camb_api_key", "CambAI key")}
                 />
               </label>
             )}
-            {form.nim_deploy_mode === "BUNDLED" && (
+          </Card>
+
+          <Card padding="p-6" className="flex flex-col gap-4">
+            <h3 className="text-lg font-semibold">Demo defaults</h3>
+            <label className="flex flex-col gap-1 text-sm">
+              Default source language
+              <input
+                className={inputClass}
+                value={form.default_source_language}
+                onChange={(e) => setForm({ ...form, default_source_language: e.target.value })}
+                placeholder="auto (ElevenLabs) or language code / CambAI ID"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Default target language
+              <input
+                className={inputClass}
+                value={form.default_target_language}
+                onChange={(e) => setForm({ ...form, default_target_language: e.target.value })}
+                placeholder="de or CambAI language ID (e.g. 26)"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.reference_app_enable_preprocessing}
+                onChange={(e) =>
+                  setForm({ ...form, reference_app_enable_preprocessing: e.target.checked })
+                }
+              />
+              Enable voice isolation and diarization preprocessing
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Voice name (optional UI label)
+              <input
+                className={inputClass}
+                value={form.voice_name}
+                onChange={(e) => setForm({ ...form, voice_name: e.target.value })}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Target language label (optional UI label)
+              <input
+                className={inputClass}
+                value={form.target_language_label}
+                onChange={(e) => setForm({ ...form, target_language_label: e.target.value })}
+              />
+            </label>
+          </Card>
+
+          {form.nim_deploy_mode === "BUNDLED" && (
+            <Card padding="p-6" className="flex flex-col gap-4">
+              <h3 className="text-lg font-semibold">Bundled NIM settings</h3>
               <label className="flex flex-col gap-1 text-sm">
-                LipSync language model (NIM_TAGS_SELECTOR)
+                LipSync language model (LIPSYNC_NIM_TAGS_SELECTOR)
                 <input
-                  className="rounded border border-neutral-600 bg-neutral-900 px-3 py-2"
+                  className={inputClass}
                   value={form.lipsync_nim_tags_selector}
                   onChange={(e) => setForm({ ...form, lipsync_nim_tags_selector: e.target.value })}
                 />
               </label>
-            )}
-            {form.nim_deploy_mode === "SERVERLESS" && (
-              <label className="flex flex-col gap-1 text-sm">
-                LipSync NVCF function ID (optional override)
-                <input
-                  className="rounded border border-neutral-600 bg-neutral-900 px-3 py-2"
-                  value={form.lipsync_nvidia_function_id}
-                  onChange={(e) => setForm({ ...form, lipsync_nvidia_function_id: e.target.value })}
-                  placeholder="Only if NVIDIA provided one via AI for Media"
-                />
-              </label>
+            </Card>
+          )}
+
+          <Card padding="p-6" className="flex flex-col gap-4">
+            <button
+              type="button"
+              className="text-left text-sm text-neutral-400 hover:text-neutral-200"
+              onClick={() => setShowAdvanced((v) => !v)}
+            >
+              {showAdvanced ? "Hide" : "Show"} advanced serverless overrides
+            </button>
+            {showAdvanced && (
+              <div className="flex flex-col gap-4">
+                <label className="flex flex-col gap-1 text-sm">
+                  LipSync NVCF function ID (optional)
+                  <input
+                    className={inputClass}
+                    value={form.lipsync_nvidia_function_id}
+                    onChange={(e) => setForm({ ...form, lipsync_nvidia_function_id: e.target.value })}
+                    placeholder="Only if NVIDIA provided one via AI for Media"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  ASD NVCF function ID (optional)
+                  <input
+                    className={inputClass}
+                    value={form.asd_nvidia_function_id}
+                    onChange={(e) => setForm({ ...form, asd_nvidia_function_id: e.target.value })}
+                    placeholder="Defaults to built-in ASD function when empty"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  NVCF gRPC host
+                  <input
+                    className={inputClass}
+                    value={form.nvidia_serverless_grpc_host}
+                    onChange={(e) => setForm({ ...form, nvidia_serverless_grpc_host: e.target.value })}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  NVCF gRPC port
+                  <input
+                    className={inputClass}
+                    value={form.nvidia_serverless_grpc_port}
+                    onChange={(e) => setForm({ ...form, nvidia_serverless_grpc_port: e.target.value })}
+                  />
+                </label>
+              </div>
             )}
           </Card>
 
@@ -277,6 +428,11 @@ export default function ConfigurePage() {
           {status && (
             <Card padding="p-6">
               <h3 className="mb-3 text-lg font-semibold">Service status</h3>
+              {!status.config_saved && (
+                <p className="mb-3 text-sm text-amber-400">
+                  No saved configuration yet. Save settings above before deploying.
+                </p>
+              )}
               <ul className="flex flex-col gap-2 text-sm">
                 {Object.entries(status.services).map(([key, svc]) => (
                   <li key={key} className="flex justify-between gap-4 border-b border-neutral-800 py-2">

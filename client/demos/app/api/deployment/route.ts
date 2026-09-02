@@ -4,6 +4,7 @@
  */
 
 import { execFile } from "child_process";
+import fs from "fs";
 import path from "path";
 import { promisify } from "util";
 import { NextResponse } from "next/server";
@@ -16,8 +17,24 @@ function projectRoot(): string {
 
 function pythonPath(): string {
   const root = projectRoot();
-  const venv = path.join(root, ".venv", "bin", "python");
-  return process.env.PYTHON_PATH || venv;
+  const candidates = [
+    process.env.PYTHON_PATH,
+    path.join(root, ".venv", "bin", "python"),
+    path.join(root, ".venv", "bin", "python3"),
+    "/opt/content-localization/.venv/bin/python",
+    "python3",
+  ].filter(Boolean) as string[];
+  for (const candidate of candidates) {
+    try {
+      if (candidate.includes("/") && !fs.existsSync(candidate)) {
+        continue;
+      }
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return "python3";
 }
 
 async function runControlPlane(command: string, extraArgs: string[] = []): Promise<unknown> {

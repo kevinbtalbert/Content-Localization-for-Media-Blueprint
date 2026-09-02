@@ -8,9 +8,13 @@ import type {
   AudioDiarizationInfo,
   AudioSegmentInfo,
 } from "../../../generated_protos/nvidia/ai4m/activespeakerdetection/v1/activespeakerdetection";
+import { envOrPersisted } from "../../utils/persistedConfig";
 
 const ROWS_PER_CHUNK = 10;
-const S2S_SERVICE = process.env.S2S_SERVICE;
+
+function s2sService(): string {
+  return envOrPersisted("S2S_SERVICE", "s2s_service") || "EL_DUBBING";
+}
 
 /** ElevenLabs diarization: top-level .words[] with text, start/end (seconds), type, speakerId */
 interface ElevenLabsWord {
@@ -135,7 +139,7 @@ export function parseElevenLabsDiarization(buffer: Buffer): AudioDiarizationInfo
  * CAMB_DUBBING → Camb AI parser, else → ElevenLabs parser.
  */
 export function parseDiarization(buffer: Buffer): AudioDiarizationInfo | null {
-  if (S2S_SERVICE === "CAMB_DUBBING") {
+  if (s2sService() === "CAMB_DUBBING") {
     return parseCambAiDiarization(buffer);
   }
   return parseElevenLabsDiarization(buffer);

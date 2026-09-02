@@ -8,8 +8,11 @@ import path from "path";
 import { spawn } from "child_process";
 import { ElevenLabsClient, ElevenLabsEnvironment } from "@elevenlabs/elevenlabs-js";
 import logger from "../../utils/logger";
+import { envOrPersisted } from "./persistedConfig";
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || "";
+function elevenLabsApiKey(): string {
+  return envOrPersisted("ELEVENLABS_API_KEY", "elevenlabs_api_key") || "";
+}
 
 let elevenLabsClient: ElevenLabsClient | null = null;
 
@@ -17,9 +20,10 @@ let elevenLabsClient: ElevenLabsClient | null = null;
  * Get or initialize the ElevenLabs client
  */
 export function getElevenLabsClient(): ElevenLabsClient | null {
-  if (!elevenLabsClient && ELEVENLABS_API_KEY) {
+  const apiKey = elevenLabsApiKey();
+  if (!elevenLabsClient && apiKey) {
     elevenLabsClient = new ElevenLabsClient({
-      apiKey: ELEVENLABS_API_KEY,
+      apiKey,
       environment: ElevenLabsEnvironment.Production,
     });
   }

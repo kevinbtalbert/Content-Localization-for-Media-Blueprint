@@ -3,12 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { createServer } from "http";
 import { parse } from "url";
 import next from "next";
 import { WebSocketServer } from "ws";
+import { applyPersistedConfigToProcessEnv } from "./api/utils/persistedConfig";
 import socketHandlers from "./api/socketHandlers";
 import logger from "./utils/logger";
+
+applyPersistedConfigToProcessEnv();
 
 const port = parseInt(process.env.CDSW_APP_PORT || process.env.PORT || "3000", 10);
 const dev = process.env.NODE_ENV !== "production";
@@ -21,7 +29,7 @@ app.prepare().then(() => {
   const server = createServer((req, res) => {
     const parsedUrl = parse(req.url!, true);
     handle(req, res, parsedUrl);
-  }).listen(port);
+  }).listen(port, "127.0.0.1");
 
   const wss = new WebSocketServer({
     server,

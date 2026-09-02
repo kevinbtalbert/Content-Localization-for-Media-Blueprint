@@ -11,13 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 
-from cai.lib.deployment_control import (  # noqa: E402
-    DeploymentConfig,
-    deploy_stack,
-    list_deployment_status,
-    load_deployment_config,
-    save_deployment_config,
-)
+from cai.lib.app_config import AppConfig, load_app_config, save_app_config  # noqa: E402
+from cai.lib.deployment_control import deploy_stack, list_deployment_status  # noqa: E402
 
 
 def main() -> int:
@@ -39,19 +34,22 @@ def main() -> int:
 
     if args.command == "save-config":
         data = json.loads(args.config_json)
-        existing = load_deployment_config()
-        merged = existing.to_dict() if existing else {}
-        merged.update(data)
-        for secret in ("ngc_api_key", "elevenlabs_api_key", "camb_api_key"):
-            if secret in data and not str(data[secret]).strip():
-                merged.pop(secret, None)
-        config = DeploymentConfig.from_dict(merged)
-        path = save_deployment_config(config)
-        print(json.dumps({"saved": str(path), "config": config.masked_dict()}, indent=2))
+        config = AppConfig.merge_update(load_app_config(), data)
+        path = save_app_config(config)
+        print(
+            json.dumps(
+                {
+                    "saved": str(path),
+                    "config": config.public_dict(),
+                    "secrets_set": config.secrets_set(),
+                },
+                indent=2,
+            )
+        )
         return 0
 
     if args.command == "deploy":
-        config = load_deployment_config()
+        config = load_app_config()
         if config is None:
             print(json.dumps({"error": "Save configuration before deploying."}), file=sys.stderr)
             return 1

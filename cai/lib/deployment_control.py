@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import json
-import os
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from cai.lib.app_config import (
+    AppConfig,
+    DEPLOYMENT_CONFIG_JSON,
+    load_app_config,
+    save_app_config,
+)
 from cai.lib.cai_common import write_dotenv_file
 from cai.lib.cml_client import ApplicationInfo, CMLClient
 from cai.lib.deploy_mode import NIMDeployMode, serverless_runtime_endpoints
 from cai.lib.paths import CONFIG_DIR, ENDPOINTS_ENV, PROJECT_ROOT
 
-DEPLOYMENT_CONFIG_JSON = CONFIG_DIR / "deployment_config.json"
+# Backward-compatible aliases
+DeploymentConfig = AppConfig
+load_deployment_config = load_app_config
+save_deployment_config = save_app_config
 
 SERVICE_SPECS: dict[str, dict[str, Any]] = {
     "lipsync": {
@@ -56,97 +63,6 @@ SERVICE_SPECS: dict[str, dict[str, Any]] = {
 }
 
 
-@dataclass
-class DeploymentConfig:
-    nim_deploy_mode: str = "SERVERLESS"
-    s2s_service: str = "EL_DUBBING"
-    ngc_api_key: str = ""
-    elevenlabs_api_key: str = ""
-    camb_api_key: str = ""
-    lipsync_nim_tags_selector: str = "language=de"
-    s2s_default_target_language: str = "de"
-    lipsync_nvidia_function_id: str = ""
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> DeploymentConfig:
-        return cls(
-            nim_deploy_mode=str(data.get("nim_deploy_mode", "SERVERLESS")).upper(),
-            s2s_service=str(data.get("s2s_service", "EL_DUBBING")),
-            ngc_api_key=str(data.get("ngc_api_key", "")),
-            elevenlabs_api_key=str(data.get("elevenlabs_api_key", "")),
-            camb_api_key=str(data.get("camb_api_key", "")),
-            lipsync_nim_tags_selector=str(
-                data.get("lipsync_nim_tags_selector", "language=de")
-            ),
-            s2s_default_target_language=str(data.get("s2s_default_target_language", "de")),
-            lipsync_nvidia_function_id=str(data.get("lipsync_nvidia_function_id", "")),
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "nim_deploy_mode": self.nim_deploy_mode,
-            "s2s_service": self.s2s_service,
-            "ngc_api_key": self.ngc_api_key,
-            "elevenlabs_api_key": self.elevenlabs_api_key,
-            "camb_api_key": self.camb_api_key,
-            "lipsync_nim_tags_selector": self.lipsync_nim_tags_selector,
-            "s2s_default_target_language": self.s2s_default_target_language,
-            "lipsync_nvidia_function_id": self.lipsync_nvidia_function_id,
-        }
-
-    def masked_dict(self) -> dict[str, Any]:
-        data = self.to_dict()
-        for secret_key in ("ngc_api_key", "elevenlabs_api_key", "camb_api_key"):
-            value = data.get(secret_key, "")
-            data[secret_key] = ("*" * 8) if value else ""
-        return data
-
-    def apply_to_environ(self) -> None:
-        os.environ["NIM_DEPLOY_MODE"] = self.nim_deploy_mode
-        os.environ["S2S_SERVICE"] = self.s2s_service
-        if self.ngc_api_key:
-            os.environ["NGC_API_KEY"] = self.ngc_api_key
-        if self.elevenlabs_api_key:
-            os.environ["ELEVENLABS_API_KEY"] = self.elevenlabs_api_key
-        if self.camb_api_key:
-            os.environ["CAMB_API_KEY"] = self.camb_api_key
-        os.environ["LIPSYNC_NIM_TAGS_SELECTOR"] = self.lipsync_nim_tags_selector
-        os.environ["S2S_DEFAULT_TARGET_LANGUAGE"] = self.s2s_default_target_language
-        if self.lipsync_nvidia_function_id:
-            os.environ["LIPSYNC_NVIDIA_FUNCTION_ID"] = self.lipsync_nvidia_function_id
-
-    def app_environment(self) -> dict[str, str]:
-        env = {
-            "NIM_DEPLOY_MODE": self.nim_deploy_mode,
-            "S2S_SERVICE": self.s2s_service,
-            "LIPSYNC_NIM_TAGS_SELECTOR": self.lipsync_nim_tags_selector,
-            "S2S_DEFAULT_TARGET_LANGUAGE": self.s2s_default_target_language,
-            "TASK_TYPE": "START_APPLICATION",
-        }
-        if self.ngc_api_key:
-            env["NGC_API_KEY"] = self.ngc_api_key
-        if self.elevenlabs_api_key:
-            env["ELEVENLABS_API_KEY"] = self.elevenlabs_api_key
-        if self.camb_api_key:
-            env["CAMB_API_KEY"] = self.camb_api_key
-        if self.lipsync_nvidia_function_id:
-            env["LIPSYNC_NVIDIA_FUNCTION_ID"] = self.lipsync_nvidia_function_id
-        return env
-
-
-def load_deployment_config() -> DeploymentConfig | None:
-    if not DEPLOYMENT_CONFIG_JSON.exists():
-        return None
-    return DeploymentConfig.from_dict(json.loads(DEPLOYMENT_CONFIG_JSON.read_text()))
-
-
-def save_deployment_config(config: DeploymentConfig) -> Path:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    DEPLOYMENT_CONFIG_JSON.write_text(json.dumps(config.to_dict(), indent=2) + "\n")
-    config.apply_to_environ()
-    return DEPLOYMENT_CONFIG_JSON
-
-
 def _find_app(apps: list[ApplicationInfo], name: str) -> ApplicationInfo | None:
     for app in apps:
         if app.name == name:
@@ -157,7 +73,7 @@ def _find_app(apps: list[ApplicationInfo], name: str) -> ApplicationInfo | None:
 def _ensure_application(
     client: CMLClient,
     spec_key: str,
-    config: DeploymentConfig,
+    config: AppConfig,
     apps: list[ApplicationInfo],
 ) -> dict[str, Any]:
     spec = SERVICE_SPECS[spec_key]
@@ -223,7 +139,7 @@ def _wait_for_bundled_nim_endpoints(timeout_s: int = 1200) -> None:
     raise TimeoutError(f"Timed out waiting for LipSync and ASD in {nim_path}")
 
 
-def wire_service_endpoints(config: DeploymentConfig) -> dict[str, str]:
+def wire_service_endpoints(config: AppConfig) -> dict[str, str]:
     """Write runtime_endpoints.env from running service metadata."""
     config.apply_to_environ()
     s2s_path = CONFIG_DIR / "s2s_endpoint.json"
@@ -264,7 +180,7 @@ def wire_service_endpoints(config: DeploymentConfig) -> dict[str, str]:
 
 
 def list_deployment_status() -> dict[str, Any]:
-    config = load_deployment_config()
+    config = load_app_config()
     client = CMLClient()
     apps = client.list_applications()
     services: dict[str, Any] = {}
@@ -299,17 +215,20 @@ def list_deployment_status() -> dict[str, Any]:
     controller_app = services.get("controller", {}).get("application")
 
     return {
-        "config": config.masked_dict() if config else None,
+        "config_saved": config is not None,
+        "config": config.public_dict() if config else None,
+        "secrets_set": config.secrets_set() if config else {},
         "nim_deploy_mode": config.nim_deploy_mode if config else None,
         "services": services,
         "endpoints_ready": endpoints_ready and has_pipeline_endpoints,
         "controller_address": controller_address,
         "ready_for_demo": has_pipeline_endpoints and bool(controller_app),
+        "config_path": str(DEPLOYMENT_CONFIG_JSON),
     }
 
 
-def deploy_stack(config: DeploymentConfig) -> dict[str, Any]:
-    save_deployment_config(config)
+def deploy_stack(config: AppConfig) -> dict[str, Any]:
+    save_app_config(config)
     client = CMLClient()
     apps = client.list_applications()
 

@@ -1,9 +1,8 @@
 name: Content Localization for Media
 description: |
   Deploy the Content Localization demo on Cloudera AI Workbench. AMP installs
-  dependencies and starts the web UI only — use the in-app Setup page to choose
-  serverless NVIDIA APIs or bundled GPU NIMs and deploy S2S, NIMs, and Controller
-  via CML API.
+  dependencies and starts the web UI. Open the in-app Setup page to enter API
+  keys, languages, and deployment mode — settings persist across restarts.
 author: Cloudera
 specification_version: 1.0
 prototype_version: 1.2
@@ -14,31 +13,6 @@ runtimes:
     kernel: Python 3.13
     edition: ContentLocalization
     version: "1.2"
-
-environment_variables:
-  RUNTIME_IDENTIFIER:
-    default: ""
-    description: |
-      Docker image for applications created from the Setup page (usually the same
-      ContentLocalization runtime image as this project). Required for in-app deploy.
-  NGC_API_KEY:
-    default: ""
-    description: "Optional default NGC key — prefer configuring in the demo Setup page"
-  S2S_SERVICE:
-    default: "EL_DUBBING"
-    description: "Default S2S backend (overridden by Setup page)"
-  ELEVENLABS_API_KEY:
-    default: ""
-    description: "ElevenLabs key (prefer Setup page)"
-  CAMB_API_KEY:
-    default: ""
-    description: "CambAI key (prefer Setup page)"
-  LIPSYNC_NIM_TAGS_SELECTOR:
-    default: "language=de"
-    description: "LipSync language model when deploying bundled NIMs"
-  S2S_DEFAULT_TARGET_LANGUAGE:
-    default: "de"
-    description: "Default dubbing target language"
 
 tasks:
   - type: run_session
@@ -52,7 +26,7 @@ tasks:
   - type: run_session
     name: Build Demo UI
     script: cai/amp/6_demo_ui/build_demo.py
-    short_summary: npm install and build Next.js demo application
+    short_summary: Build Next.js demo (skipped when runtime image already includes dist/)
     kernel: python3
     cpu: 4
     memory: 8
@@ -63,9 +37,8 @@ tasks:
     script: cai/amp/6_demo_ui/start_demo.py
     short_summary: Start web UI with Setup & Deployment page
     long_summary: |
-      Start the Content Localization web UI. Open the Setup page to deploy
-      serverless or bundled NIM services. Enable unauthenticated app access
-      for external access to the demo subdomain.
+      Start the Content Localization web UI. Open Setup to deploy serverless or
+      bundled NIM services. Enable unauthenticated app access for external URLs.
     cpu: 2
     memory: 8
     environment:

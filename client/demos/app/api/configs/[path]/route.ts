@@ -5,6 +5,7 @@
 
 import { NextResponse } from "next/server";
 import { getEnablePreprocessingFromEnv } from "../../utils/audioProcessing";
+import { envOrPersisted } from "../../utils/persistedConfig";
 
 const SUPPORTED_S2S_SERVICES = ["EL_DUBBING", "CAMB_DUBBING"] as const;
 type S2sService = (typeof SUPPORTED_S2S_SERVICES)[number];
@@ -71,28 +72,27 @@ const getLanguageConfig = (s2sService: S2sService): LanguageConfig => {
 
 export async function GET() {
   try {
-    const s2sService = resolveS2sService(process.env.S2S_SERVICE);
+    const s2sService = resolveS2sService(envOrPersisted("S2S_SERVICE", "s2s_service"));
     const { supportedSourceLanguages, supportedTargetLanguages, defaultSourceLanguage, defaultTargetLanguage } =
       getLanguageConfig(s2sService);
     const enablePreprocessing = getEnablePreprocessingFromEnv();
 
+    const resolvedSourceLanguage =
+      envOrPersisted("DEFAULT_SOURCE_LANGUAGE", "default_source_language") || defaultSourceLanguage;
+    const resolvedTargetLanguage =
+      envOrPersisted("DEFAULT_TARGET_LANGUAGE", "default_target_language") || defaultTargetLanguage;
+
     const configMapping = {
-      target_language: process.env.TARGET_LANGUAGE_LABEL,
-      voice_name: process.env.VOICE_NAME,
+      target_language: envOrPersisted("TARGET_LANGUAGE_LABEL", "target_language_label"),
+      voice_name: envOrPersisted("VOICE_NAME", "voice_name"),
       enable_preprocessing: enablePreprocessing,
       supported_source_languages: supportedSourceLanguages,
       supported_target_languages: supportedTargetLanguages,
-      default_source_language: isLanguageSupported(
-        supportedSourceLanguages,
-        process.env.DEFAULT_SOURCE_LANGUAGE || defaultSourceLanguage,
-      )
-        ? process.env.DEFAULT_SOURCE_LANGUAGE
+      default_source_language: isLanguageSupported(supportedSourceLanguages, resolvedSourceLanguage)
+        ? resolvedSourceLanguage
         : defaultSourceLanguage,
-      default_target_language: isLanguageSupported(
-        supportedTargetLanguages,
-        process.env.DEFAULT_TARGET_LANGUAGE || defaultTargetLanguage,
-      )
-        ? process.env.DEFAULT_TARGET_LANGUAGE
+      default_target_language: isLanguageSupported(supportedTargetLanguages, resolvedTargetLanguage)
+        ? resolvedTargetLanguage
         : defaultTargetLanguage,
     };
 

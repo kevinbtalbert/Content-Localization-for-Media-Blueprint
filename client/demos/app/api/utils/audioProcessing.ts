@@ -9,8 +9,11 @@ import logger from "../../utils/logger";
 import { isolateAudio as isolateAudioElevenLabs } from "./elevenlabs";
 import { isolateAudio as isolateAudioCamb } from "./cambai";
 import { saveElevenLabsDiarization, saveCambAiDiarization } from "./elevenLabsDiarization";
+import { envOrPersisted } from "./persistedConfig";
 
-const S2S_SERVICE = process.env.S2S_SERVICE;
+function s2sService(): string {
+  return envOrPersisted("S2S_SERVICE", "s2s_service") || "EL_DUBBING";
+}
 
 export interface ProcessedAudio {
   audioFilePath: string;
@@ -35,7 +38,7 @@ export interface AudioProcessingParams {
  * Override via REFERENCE_APP_ENABLE_PREPROCESSING.
  */
 export function getEnablePreprocessingFromEnv(): boolean {
-  return process.env.REFERENCE_APP_ENABLE_PREPROCESSING === "true";
+  return envOrPersisted("REFERENCE_APP_ENABLE_PREPROCESSING", "reference_app_enable_preprocessing") === "true";
 }
 /**
  * Validate that the diarization file is valid JSON
@@ -119,7 +122,7 @@ export async function processAudioWithAdvancedSettings(params: AudioProcessingPa
   if (customDiarizationFile) {
     logger.info("Saving custom diarization file");
     diarizationPromise = saveCustomDiarizationFile(streamId, customDiarizationFile, diarizationOutputDir);
-  } else if (S2S_SERVICE === "CAMB_DUBBING") {
+  } else if (s2sService() === "CAMB_DUBBING") {
     // Camb AI diarization: parse sourceLanguage as numeric language ID
     logger.info("Performing automatic diarization via Camb AI");
     const languageId = sourceLanguage ? parseInt(sourceLanguage, 10) || 1 : 1;
@@ -133,7 +136,7 @@ export async function processAudioWithAdvancedSettings(params: AudioProcessingPa
   // If voice isolation is enabled, perform it (in parallel with diarization)
   if (voiceIsolation) {
     const isolatedOutputPath = path.join(audioOutputDir, `${streamId}_isolated.wav`);
-    if (S2S_SERVICE === "CAMB_DUBBING") {
+    if (s2sService() === "CAMB_DUBBING") {
       logger.info("Performing voice isolation via Camb AI");
       isolationPromise = isolateAudioCamb(audioFilePath, isolatedOutputPath);
     } else {

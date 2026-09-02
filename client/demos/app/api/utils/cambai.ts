@@ -17,9 +17,13 @@ import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
 import logger from "../../utils/logger";
+import { envOrPersisted } from "./persistedConfig";
 
 const CAMB_API_BASE_URL = "https://client.camb.ai/apis";
-const CAMB_API_KEY = process.env.CAMB_API_KEY || "";
+
+function cambApiKey(): string {
+  return envOrPersisted("CAMB_API_KEY", "camb_api_key") || "";
+}
 
 const POLL_INTERVAL_MS = 10_000;
 const MAX_POLL_ATTEMPTS = 120;
@@ -40,7 +44,7 @@ async function submitTranscription(audioFilePath: string, languageId: number = 1
 
   const response = await fetch(`${CAMB_API_BASE_URL}/transcribe`, {
     method: "POST",
-    headers: { "x-api-key": CAMB_API_KEY },
+    headers: { "x-api-key": cambApiKey() },
     body: formData,
   });
 
@@ -65,7 +69,7 @@ async function submitTranscription(audioFilePath: string, languageId: number = 1
 async function waitForTranscription(taskId: string): Promise<number> {
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     const response = await fetch(`${CAMB_API_BASE_URL}/transcribe/${taskId}`, {
-      headers: { "x-api-key": CAMB_API_KEY },
+      headers: { "x-api-key": cambApiKey() },
     });
 
     if (!response.ok) {
@@ -102,7 +106,7 @@ async function waitForTranscription(taskId: string): Promise<number> {
 async function getTranscriptionResult(runId: number): Promise<any> {
   const url = `${CAMB_API_BASE_URL}/transcription-result/${runId}?word_level_timestamps=true`;
   const response = await fetch(url, {
-    headers: { "x-api-key": CAMB_API_KEY },
+    headers: { "x-api-key": cambApiKey() },
   });
 
   if (!response.ok) {
@@ -115,7 +119,7 @@ async function getTranscriptionResult(runId: number): Promise<any> {
 
 /**
  * Perform Camb AI diarization: submit → poll → fetch result.
- * Returns null if CAMB_API_KEY is not set (graceful skip).
+ * Returns null if cambApiKey() is not set (graceful skip).
  * @param audioFilePath - Path to the audio file
  * @param streamId - Unique stream identifier for logging
  * @param languageId - Camb AI numeric language ID (default: 1)
@@ -126,8 +130,8 @@ export async function performCambAiDiarization(
   streamId: string,
   languageId: number = 1,
 ): Promise<any | null> {
-  if (!CAMB_API_KEY) {
-    logger.warn("CAMB_API_KEY not set. Skipping Camb AI diarization.");
+  if (!cambApiKey()) {
+    logger.warn("cambApiKey() not set. Skipping Camb AI diarization.");
     return null;
   }
 
@@ -179,8 +183,8 @@ export async function saveCambAiDiarizationFile(streamId: string, data: any, out
  * @returns Promise resolving to outputPath
  */
 export async function isolateAudio(audioFilePath: string, outputPath: string): Promise<string> {
-  if (!CAMB_API_KEY) {
-    throw new Error("CAMB_API_KEY not set. Cannot perform Camb AI audio isolation.");
+  if (!cambApiKey()) {
+    throw new Error("cambApiKey() not set. Cannot perform Camb AI audio isolation.");
   }
   if (!fs.existsSync(audioFilePath)) {
     throw new Error(`Audio file not found: ${audioFilePath}`);
@@ -201,7 +205,7 @@ export async function isolateAudio(audioFilePath: string, outputPath: string): P
 
   const submitRes = await fetch(`${CAMB_API_BASE_URL}/audio-separation`, {
     method: "POST",
-    headers: { "x-api-key": CAMB_API_KEY },
+    headers: { "x-api-key": cambApiKey() },
     body: formData,
   });
   if (!submitRes.ok) {
@@ -217,7 +221,7 @@ export async function isolateAudio(audioFilePath: string, outputPath: string): P
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     const pollRes = await fetch(`${CAMB_API_BASE_URL}/audio-separation/${taskId}`, {
-      headers: { "x-api-key": CAMB_API_KEY },
+      headers: { "x-api-key": cambApiKey() },
     });
     if (!pollRes.ok) {
       throw new Error(`Camb isolation poll failed (${pollRes.status}): ${await pollRes.text()}`);
@@ -239,7 +243,7 @@ export async function isolateAudio(audioFilePath: string, outputPath: string): P
 
   // Step 3: fetch foreground URL
   const resultRes = await fetch(`${CAMB_API_BASE_URL}/audio-separation-result/${runId}`, {
-    headers: { "x-api-key": CAMB_API_KEY },
+    headers: { "x-api-key": cambApiKey() },
   });
   if (!resultRes.ok) {
     throw new Error(`Camb /audio-separation-result failed (${resultRes.status}): ${await resultRes.text()}`);
