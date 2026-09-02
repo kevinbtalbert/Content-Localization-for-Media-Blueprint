@@ -92,7 +92,7 @@ tasks:
   - type: start_application
     name: Speech-to-Speech Service
     subdomain: cl-s2s
-    script: cai/amp/4_services/start_s2s.py
+    script: cai/amp/4_services/launch_s2s.py
     short_summary: Start S2S gRPC service (ElevenLabs or CambAI)
     cpu: 2
     memory: 4
@@ -110,7 +110,7 @@ tasks:
   - type: start_application
     name: Controller Service
     subdomain: cl-controller
-    script: cai/amp/4_services/start_controller.py
+    script: cai/amp/4_services/launch_controller.py
     short_summary: Start Controller gRPC orchestration service
     cpu: 4
     memory: 8
