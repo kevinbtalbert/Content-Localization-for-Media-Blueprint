@@ -13,8 +13,19 @@ if [[ ! -f "${entrypoint_file}" ]]; then
 fi
 
 cache_root="${CDSW_PROJECT_DIR:-/home/cdsw}/volumes/models/${nim_type}"
-export NIM_CACHE_DIR="${NIM_CACHE_DIR:-${cache_root}}"
-mkdir -p "${NIM_CACHE_DIR}"
+export NIM_CACHE_PATH="${NIM_CACHE_PATH:-${NIM_CACHE_DIR:-${cache_root}}}"
+export NIM_CACHE_DIR="${NIM_CACHE_DIR:-${NIM_CACHE_PATH}}"
+mkdir -p "${NIM_CACHE_PATH}"
+
+# Bundled NIM defaults to /opt/nim/.cache (see NVIDIA LipSync docs). When not using
+# Docker volume mounts, point the in-bundle path at the writable project cache.
+bundle_cache="${bundle_root}/opt/nim/.cache"
+if [[ -d "${bundle_root}/opt/nim" ]]; then
+  if [[ -e "${bundle_cache}" && ! -L "${bundle_cache}" ]]; then
+    rm -rf "${bundle_cache}"
+  fi
+  ln -sfn "${NIM_CACHE_PATH}" "${bundle_cache}" 2>/dev/null || true
+fi
 
 lib_paths=(
   "${bundle_root}/usr/local/lib"
@@ -34,5 +45,6 @@ fi
 
 entrypoint="$(tr -d '\n' <"${entrypoint_file}")"
 echo "Starting bundled ${nim_type} NIM: ${entrypoint}"
+echo "  NIM_CACHE_PATH=${NIM_CACHE_PATH}"
 echo "  NIM_CACHE_DIR=${NIM_CACHE_DIR}"
 exec "${entrypoint}"

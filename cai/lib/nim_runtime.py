@@ -26,6 +26,7 @@ LIPSYNC_NIM_ENV_KEYS = (
     "NIM_GRPC_API_PORT",
     "NIM_TAGS_SELECTOR",
     "NIM_MAX_CONCURRENCY_PER_GPU",
+    "NIM_CACHE_PATH",
     "NIM_CACHE_DIR",
     "LIPSYNC_DEBUG_MODE",
 )
@@ -35,6 +36,7 @@ ASD_NIM_ENV_KEYS = (
     "NIM_GRPC_API_PORT",
     "MAXINE_MAX_CONCURRENCY_PER_GPU",
     "NIM_MAX_CONCURRENCY_PER_GPU",
+    "NIM_CACHE_PATH",
     "NIM_CACHE_DIR",
 )
 
@@ -193,6 +195,7 @@ def configure_lipsync_env() -> dict[str, Any]:
         "NIM_GRPC_API_PORT": grpc_port,
         "NIM_TAGS_SELECTOR": tags,
         "NIM_MAX_CONCURRENCY_PER_GPU": os.environ.get("NIM_MAX_CONCURRENCY_PER_GPU", "1"),
+        "NIM_CACHE_PATH": cache_dir,
         "NIM_CACHE_DIR": cache_dir,
         "LIPSYNC_DEBUG_MODE": os.environ.get("LIPSYNC_DEBUG_MODE", "0"),
     }
@@ -223,6 +226,7 @@ def configure_asd_env() -> dict[str, Any]:
         "NIM_GRPC_API_PORT": grpc_port,
         "MAXINE_MAX_CONCURRENCY_PER_GPU": "1",
         "NIM_MAX_CONCURRENCY_PER_GPU": os.environ.get("NIM_MAX_CONCURRENCY_PER_GPU", "1"),
+        "NIM_CACHE_PATH": cache_dir,
         "NIM_CACHE_DIR": cache_dir,
     }
     os.environ.update(env)
@@ -254,6 +258,7 @@ def run_nim_server(nim_type: str) -> int:
     print(f"Starting bundled NIM: {' '.join(cmd)}", flush=True)
     print(f"  bundle={bundle}", flush=True)
     print(f"  entrypoint={entrypoint}", flush=True)
+    print(f"  NIM_CACHE_PATH={os.environ.get('NIM_CACHE_PATH', '')}", flush=True)
     print(f"  NIM_CACHE_DIR={os.environ.get('NIM_CACHE_DIR', '')}", flush=True)
     return subprocess.call(cmd)
 
