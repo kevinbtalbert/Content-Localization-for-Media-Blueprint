@@ -21,13 +21,27 @@ from common.tls import create_channel_credentials
 from controller_service.service import ControllerService
 
 
-def _nvcf_call_metadata(function_id: str, *, service_label: str) -> tuple[tuple[str, str], ...] | None:
-    """Build NVCF metadata when a resolved function ID is available."""
-    if not function_id:
+def _is_nvcf_endpoint(host: str) -> bool:
+    return "nvcf.nvidia.com" in host.strip().lower()
+
+
+def _nvcf_call_metadata(
+    function_id: str,
+    *,
+    service_label: str,
+    host: str,
+) -> tuple[tuple[str, str], ...] | None:
+    """Build NVCF metadata for serverless NVCF hops."""
+    if not _is_nvcf_endpoint(host):
         return None
+    if not function_id:
+        raise RuntimeError(
+            f"{service_label} NVCF function ID is required for serverless mode "
+            f"(set LIPSYNC_NVIDIA_FUNCTION_ID / ASD_NVIDIA_FUNCTION_ID in Launchpad)."
+        )
     api_key = os.environ.get("NGC_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError(f"{service_label} NVCF function ID is configured but NGC_API_KEY is missing")
+        raise RuntimeError(f"{service_label} NVCF requires NGC_API_KEY in the Controller environment")
     return nvcf_grpc_metadata(api_key, function_id)
 
 
@@ -133,6 +147,7 @@ def main() -> None:
             call_metadata=_nvcf_call_metadata(
                 lipsync_nvcf_function_id(),
                 service_label="LipSync",
+                host=lipsync_server.host,
             ),
         )
         s2s_nim = None
@@ -161,6 +176,7 @@ def main() -> None:
                 call_metadata=_nvcf_call_metadata(
                     asd_nvcf_function_id(),
                     service_label="ASD",
+                    host=asd_server.host,
                 ),
             )
 

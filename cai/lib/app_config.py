@@ -205,6 +205,15 @@ class AppConfig:
                 errors.append("ElevenLabs API key is required when preprocessing is enabled.")
 
         if mode == "SERVERLESS":
+            if not self.lipsync_nvidia_function_id.strip():
+                errors.append(
+                    "LipSync NVCF function ID is required for serverless mode "
+                    "(from NVIDIA AI for Media / build.nvidia.com)."
+                )
+            if not self.asd_nvidia_function_id.strip():
+                warnings.append(
+                    "ASD NVCF function ID is empty — using the built-in default catalog ID."
+                )
             warnings.append(
                 "Serverless mode uses NVIDIA NVCF for LipSync and ASD — no GPU NIM apps are created in this project."
             )

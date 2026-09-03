@@ -159,6 +159,44 @@ class GRPCInferenceHandle(GRPCServiceHandle, ABC):
         self.channel = None
         self.stub = None
 
+    def is_healthy(self) -> bool:
+        """Check downstream health, including NVCF auth metadata when configured."""
+        from grpc_health.v1 import health_pb2
+        from grpc_health.v1 import health_pb2_grpc
+
+        from common.handles import HEALTH_CHECK_TIMEOUT
+
+        address = f"{self.host}:{self.port}"
+        if self.channel_credentials is not None:
+            channel = grpc.secure_channel(address, self.channel_credentials)
+        else:
+            channel = grpc.insecure_channel(address)
+        if self.call_metadata:
+            from common.nvcf import intercept_channel_with_metadata
+
+            channel = intercept_channel_with_metadata(channel, self.call_metadata)
+        stub = health_pb2_grpc.HealthStub(channel)
+        try:
+            logger.debug(
+                f"Checking gRPC health: {address} (service='{self.health_check_service}')"
+            )
+            response = stub.Check(
+                health_pb2.HealthCheckRequest(service=self.health_check_service),
+                timeout=HEALTH_CHECK_TIMEOUT,
+            )
+            if response.status == health_pb2.HealthCheckResponse.SERVING:
+                logger.debug(f"gRPC health check passed for {address}")
+                return True
+            logger.error(f"gRPC health check failed for {address}: status={response.status}")
+            raise ConnectionError(
+                f"gRPC service at {address} not healthy: status={response.status}"
+            )
+        except grpc.RpcError as e:
+            logger.error(f"gRPC health check failed for {address}: {e!s}")
+            raise ConnectionError(f"gRPC service at {address} health check failed: {e!s}") from e
+        finally:
+            channel.close()
+
     @abstractmethod
     def get_response_iterator(self, request_iterator: Iterator[Any]) -> Iterator[Any]:
         """Get a response iterator from the NIM.
