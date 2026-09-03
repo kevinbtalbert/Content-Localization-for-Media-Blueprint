@@ -110,6 +110,7 @@ def write_controller_shell_env(endpoints: dict[str, str]) -> Path:
         "NIM_DEPLOY_MODE",
         "CONTROLLER_LIPSYNC_SSL_MODE",
         "CONTROLLER_ASD_SSL_MODE",
+        "CONTROLLER_NIM_SSL_ROOT_CERT",
     )
     lines = ["# Generated for Controller launcher — do not edit"]
     for key in keys:

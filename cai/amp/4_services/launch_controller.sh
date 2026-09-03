@@ -43,6 +43,8 @@ print(f"Downstream S2S_SERVER={endpoints.get('S2S_SERVER', '')}", flush=True)
 print(f"Downstream LIPSYNC_SERVER={endpoints.get('LIPSYNC_SERVER', '')}", flush=True)
 if endpoints.get("ASD_SERVER"):
     print(f"Downstream ASD_SERVER={endpoints['ASD_SERVER']}", flush=True)
+if endpoints.get("CONTROLLER_NIM_SSL_ROOT_CERT"):
+    print(f"NVCF TLS root cert: {endpoints['CONTROLLER_NIM_SSL_ROOT_CERT']}", flush=True)
 PY
 
 app_port="${CDSW_APP_PORT:-8100}"
@@ -63,6 +65,8 @@ if [[ ! -x "${python}" ]]; then
   python="$(command -v python3)"
 fi
 
+ssl_root_cert="${CONTROLLER_NIM_SSL_ROOT_CERT:-}"
+
 exec "${python}" "${project}/src/controller_service/entrypoint.py" \
   --service-uri "${CDSW_IP_ADDRESS:-127.0.0.1}:${CONTROLLER_GRPC_API_PORT:-50056}" \
   --max-concurrency "${CONTROLLER_MAX_CONCURRENCY:-1}" \
@@ -72,4 +76,5 @@ exec "${python}" "${project}/src/controller_service/entrypoint.py" \
   --lipsync-server "${LIPSYNC_SERVER}" \
   --lipsync-ssl-mode "${CONTROLLER_LIPSYNC_SSL_MODE:-DISABLED}" \
   --asd-ssl-mode "${CONTROLLER_ASD_SSL_MODE:-DISABLED}" \
+  ${ssl_root_cert:+--ssl-root-cert "${ssl_root_cert}"} \
   ${ASD_SERVER:+--asd-server "${ASD_SERVER}"}

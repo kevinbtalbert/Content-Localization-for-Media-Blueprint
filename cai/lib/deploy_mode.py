@@ -8,6 +8,7 @@ from enum import Enum
 from pathlib import Path
 
 from cai.lib.paths import NIM_ENDPOINTS_JSON, PROJECT_ROOT
+from cai.lib.tls_paths import default_ssl_root_cert_path
 
 # Keep in sync with src/common/nvcf.py (controller reads that module after PYTHONPATH setup).
 DEFAULT_ASD_NVCF_FUNCTION_ID = "f286f937-05c4-454b-8312-fba67a2a6fa7"
@@ -188,6 +189,7 @@ def serverless_runtime_endpoints() -> dict[str, str]:
         "CONTROLLER_LIPSYNC_SSL_MODE": "TLS",
         "ASD_SERVER": address,
         "CONTROLLER_ASD_SSL_MODE": "TLS",
+        "CONTROLLER_NIM_SSL_ROOT_CERT": default_ssl_root_cert_path(),
         "NIM_DEPLOY_MODE": NIMDeployMode.SERVERLESS.value,
     }
     lip_fn = lipsync_function_id()
