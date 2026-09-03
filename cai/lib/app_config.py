@@ -228,12 +228,49 @@ def validate_merged_config(patch: dict[str, Any] | None = None) -> dict[str, Any
 def load_app_config() -> AppConfig | None:
     if not DEPLOYMENT_CONFIG_JSON.exists():
         return None
-    return AppConfig.from_dict(json.loads(DEPLOYMENT_CONFIG_JSON.read_text()))
+    raw = DEPLOYMENT_CONFIG_JSON.read_text().strip()
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return AppConfig.from_dict(data)
+
+
+def deployment_config_load_error() -> str | None:
+    """Human-readable reason saved config cannot be loaded, if the file exists."""
+    if not DEPLOYMENT_CONFIG_JSON.exists():
+        return None
+    raw = DEPLOYMENT_CONFIG_JSON.read_text().strip()
+    if not raw:
+        return (
+            f"{DEPLOYMENT_CONFIG_JSON.name} is empty — click Save configuration, "
+            "then redeploy the pipeline."
+        )
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return (
+            f"{DEPLOYMENT_CONFIG_JSON.name} is invalid JSON ({exc.msg}) — "
+            "click Save configuration, then redeploy the pipeline."
+        )
+    if not isinstance(data, dict):
+        return (
+            f"{DEPLOYMENT_CONFIG_JSON.name} must be a JSON object — "
+            "click Save configuration, then redeploy the pipeline."
+        )
+    return None
 
 
 def save_app_config(config: AppConfig) -> Path:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    DEPLOYMENT_CONFIG_JSON.write_text(json.dumps(config.to_dict(), indent=2) + "\n")
+    payload = json.dumps(config.to_dict(), indent=2) + "\n"
+    tmp_path = DEPLOYMENT_CONFIG_JSON.with_suffix(".json.tmp")
+    tmp_path.write_text(payload)
+    tmp_path.replace(DEPLOYMENT_CONFIG_JSON)
     env = config.apply_to_environ()
     write_dotenv_file(APP_ENVIRONMENT_ENV, env)
     return DEPLOYMENT_CONFIG_JSON

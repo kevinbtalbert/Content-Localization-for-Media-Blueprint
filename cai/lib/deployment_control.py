@@ -11,6 +11,7 @@ from typing import Any
 from cai.lib.app_config import (
     AppConfig,
     DEPLOYMENT_CONFIG_JSON,
+    deployment_config_load_error,
     load_app_config,
     save_app_config,
     validate_merged_config,
@@ -728,6 +729,7 @@ def list_deployment_status() -> dict[str, Any]:
 
     return {
         "config_saved": config is not None,
+        "config_error": deployment_config_load_error(),
         "config": config.public_dict() if config else None,
         "secrets_set": config.secrets_set() if config else {},
         "nim_deploy_mode": config.nim_deploy_mode if config else None,
