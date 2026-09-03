@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import collections
 import os
 from collections.abc import Callable
 from typing import Any
@@ -16,6 +17,16 @@ DEFAULT_ASD_NVCF_FUNCTION_ID = "f286f937-05c4-454b-8312-fba67a2a6fa7"
 # LipSync has no public gRPC Try API page today (AI for Media gated). Leave blank
 # until NVIDIA publishes a catalog ID or provides one via the private access program.
 DEFAULT_LIPSYNC_NVCF_FUNCTION_ID = ""
+
+
+class _ClientCallDetails(
+    collections.namedtuple(
+        "_ClientCallDetails",
+        ("method", "timeout", "metadata", "credentials", "wait_for_ready", "compression"),
+    ),
+    grpc.ClientCallDetails,
+):
+    """grpc.ClientCallDetails compatible across grpcio versions (no grpc.interceptors submodule)."""
 
 
 def resolve_nvcf_function_id(env_var: str, default: str = "") -> str:
@@ -64,13 +75,13 @@ class _MetadataClientInterceptor(
     ) -> Any:
         metadata = list(client_call_details.metadata or [])
         metadata.extend(self._metadata)
-        details = grpc.interceptors.ClientCallDetails(
+        details = _ClientCallDetails(
             client_call_details.method,
             client_call_details.timeout,
             metadata,
             client_call_details.credentials,
             client_call_details.wait_for_ready,
-            client_call_details.compression,
+            getattr(client_call_details, "compression", None),
         )
         return continuation(details, request_or_iterator)
 
