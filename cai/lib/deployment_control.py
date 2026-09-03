@@ -16,9 +16,11 @@ from cai.lib.app_config import (
     validate_merged_config,
 )
 from cai.lib.build_progress import (
+    BUILD_PROGRESS_JSON,
     finish_build_progress,
     is_build_in_progress,
     read_build_progress,
+    reconcile_stale_build,
     set_step,
     start_build_progress,
 )
@@ -126,6 +128,160 @@ def mode_summary(config: AppConfig | None) -> dict[str, str]:
     }
 
 
+RUNNING_APP_STATUSES = frozenset({"RUNNING", "APPLICATION_RUNNING"})
+FAILED_APP_STATUSES = frozenset(
+    {
+        "APPLICATION_FAILED",
+        "FAILED",
+        "STOPPED",
+        "APPLICATION_STOPPED",
+        "ERROR",
+        "APPLICATION_ERROR",
+    }
+)
+
+STEP_ID_BY_SERVICE = {
+    "lipsync": "lipsync",
+    "asd": "asd",
+    "s2s": "s2s",
+    "controller": "controller",
+}
+
+
+def _normalize_app_status(status: str | None) -> str:
+    return (status or "").upper()
+
+
+def _is_app_running(status: str | None) -> bool:
+    normalized = _normalize_app_status(status)
+    return normalized in RUNNING_APP_STATUSES
+
+
+def _is_app_failed(status: str | None) -> bool:
+    normalized = _normalize_app_status(status)
+    return normalized in FAILED_APP_STATUSES or "FAIL" in normalized
+
+
+def _required_service_keys(config: AppConfig | None) -> list[str]:
+    if config and config.nim_deploy_mode == NIMDeployMode.BUNDLED.value:
+        return ["lipsync", "asd", "s2s", "controller"]
+    return ["s2s", "controller"]
+
+
+def _collect_failed_services(
+    services: dict[str, Any], required_keys: list[str]
+) -> list[dict[str, str]]:
+    failed: list[dict[str, str]] = []
+    for key in required_keys:
+        svc = services.get(key, {})
+        app = svc.get("application")
+        if not app:
+            continue
+        app_status = app.get("status", "")
+        if _is_app_failed(app_status):
+            failed.append(
+                {
+                    "key": key,
+                    "name": str(svc.get("name", key)),
+                    "status": str(app_status),
+                }
+            )
+    return failed
+
+
+def _evaluate_pipeline(
+    services: dict[str, Any],
+    *,
+    endpoints_ready: bool,
+    required_keys: list[str],
+) -> dict[str, Any]:
+    failed_services = _collect_failed_services(services, required_keys)
+    running_services: list[str] = []
+    pending_services: list[str] = []
+    for key in required_keys:
+        svc = services.get(key, {})
+        app = svc.get("application")
+        if not app:
+            pending_services.append(str(svc.get("name", key)))
+            continue
+        app_status = app.get("status", "")
+        if _is_app_running(app_status):
+            running_services.append(str(svc.get("name", key)))
+        elif not _is_app_failed(app_status):
+            pending_services.append(f"{svc.get('name', key)} ({app_status})")
+
+    all_running = len(running_services) == len(required_keys) and not pending_services
+    pipeline_ready = endpoints_ready and all_running and not failed_services
+    pipeline_failed = bool(failed_services)
+
+    return {
+        "pipeline_ready": pipeline_ready,
+        "pipeline_failed": pipeline_failed,
+        "failed_services": failed_services,
+        "running_services": running_services,
+        "pending_services": pending_services,
+    }
+
+
+def _reconcile_build_progress(
+    services: dict[str, Any], failed_services: list[dict[str, str]]
+) -> dict[str, Any] | None:
+    """If build progress says success but apps failed, correct the saved progress file."""
+    build = read_build_progress()
+    if not build or build.get("in_progress") or not failed_services:
+        return build
+
+    if build.get("success") is False:
+        return build
+
+    summary = "; ".join(f"{item['name']} ({item['status']})" for item in failed_services)
+    build = json.loads(json.dumps(build))
+    build["success"] = False
+    build["error"] = f"Backend not healthy: {summary}"
+    build["message"] = build["error"]
+
+    failed_keys = {item["key"] for item in failed_services}
+    failed_step_ids = {STEP_ID_BY_SERVICE[k] for k in failed_keys if k in STEP_ID_BY_SERVICE}
+    for step in build.get("steps", []):
+        step_id = step.get("id", "")
+        if step_id in failed_step_ids or step_id in {"ready", "wait_s2s"}:
+            step["status"] = "error"
+            matching = next(
+                (f for f in failed_services if STEP_ID_BY_SERVICE.get(f["key"]) == step_id),
+                None,
+            )
+            if matching:
+                step["detail"] = matching["status"]
+            elif step_id == "ready":
+                step["detail"] = summary
+
+    BUILD_PROGRESS_JSON.write_text(json.dumps(build, indent=2) + "\n")
+    return build
+
+
+def _wait_for_service_running(
+    service_key: str,
+    *,
+    timeout_s: int = 900,
+    on_tick: Callable[[int, str], None] | None = None,
+) -> None:
+    started = time.time()
+    deadline = started + timeout_s
+    while time.time() < deadline:
+        status = list_deployment_status()
+        svc = status.get("services", {}).get(service_key, {})
+        app = svc.get("application")
+        app_status = (app or {}).get("status", "not started")
+        if _is_app_failed(app_status):
+            raise RuntimeError(f"{svc.get('name', service_key)} failed ({app_status})")
+        if _is_app_running(app_status):
+            return
+        if on_tick:
+            on_tick(int(time.time() - started), str(app_status))
+        time.sleep(10)
+    raise TimeoutError(f"Timed out waiting for {service_key} to reach RUNNING")
+
+
 def _find_app(apps: list[ApplicationInfo], name: str) -> ApplicationInfo | None:
     for app in apps:
         if app.name == name:
@@ -213,19 +369,26 @@ def _wait_for_bundled_nim_endpoints(
     raise TimeoutError(f"Timed out waiting for LipSync and ASD in {nim_path}")
 
 
-def _wait_for_pipeline_ready(timeout_s: int = 900) -> None:
+def _wait_for_pipeline_ready(config: AppConfig, timeout_s: int = 900) -> None:
+    required = _required_service_keys(config)
     started = time.time()
     deadline = started + timeout_s
     while time.time() < deadline:
         status = list_deployment_status()
+        failed = status.get("failed_services") or []
+        if failed:
+            summary = "; ".join(f"{f['name']} ({f['status']})" for f in failed)
+            raise RuntimeError(f"Pipeline build failed: {summary}")
+
         if status.get("pipeline_ready"):
-            detail = status.get("controller_address") or "connected"
+            detail = status.get("controller_address") or "all services running"
             set_step("ready", "running", detail=f"Controller at {detail}")
             return
-        controller = status.get("services", {}).get("controller", {}).get("application")
-        ctrl_status = controller.get("status") if controller else "starting"
+
+        pending = status.get("pending_services") or []
         elapsed = int(time.time() - started)
-        set_step("ready", "running", detail=f"Controller status: {ctrl_status} ({elapsed}s)")
+        detail = ", ".join(pending) if pending else "waiting for services"
+        set_step("ready", "running", detail=f"{detail} ({elapsed}s)")
         time.sleep(10)
     raise TimeoutError("Timed out waiting for the pipeline to become ready")
 
@@ -343,13 +506,19 @@ def build_pipeline(config: AppConfig | None = None) -> dict[str, Any]:
         set_step(
             "wait_s2s",
             "running",
-            message="Waiting for Speech-to-Speech — this often takes several minutes…",
+            message="Waiting for Speech-to-Speech to reach RUNNING — this can take several minutes…",
         )
 
-        def tick_s2s(elapsed: int) -> None:
-            set_step("wait_s2s", "running", detail=f"Waiting for S2S endpoint ({elapsed}s elapsed)")
+        def tick_s2s(elapsed: int, app_status: str) -> None:
+            set_step(
+                "wait_s2s",
+                "running",
+                detail=f"Speech-to-Speech status: {app_status} ({elapsed}s elapsed)",
+            )
 
-        _wait_for_file(CONFIG_DIR / "s2s_endpoint.json", on_tick=tick_s2s)
+        _wait_for_service_running("s2s", on_tick=tick_s2s)
+        if not (CONFIG_DIR / "s2s_endpoint.json").exists():
+            _wait_for_file(CONFIG_DIR / "s2s_endpoint.json", timeout_s=120, on_tick=lambda e: tick_s2s(e, "waiting for endpoint file"))
         set_step("wait_s2s", "done")
 
         set_step("wire", "running", message="Connecting pipeline endpoints…")
@@ -379,8 +548,8 @@ def build_pipeline(config: AppConfig | None = None) -> dict[str, Any]:
         )
 
         set_step("ready", "running", message="Waiting for the full pipeline to become ready…")
-        _wait_for_pipeline_ready()
-        set_step("ready", "done", detail="Pipeline is ready")
+        _wait_for_pipeline_ready(config)
+        set_step("ready", "done", detail="All backend applications are running")
 
         finish_build_progress(True, "Pipeline build completed successfully.")
         return {
@@ -436,9 +605,20 @@ def list_deployment_status() -> dict[str, Any]:
             endpoint_values.get("S2S_SERVER") and endpoint_values.get("LIPSYNC_SERVER")
         )
 
-    controller_app = services.get("controller", {}).get("application")
-    pipeline_ready = has_pipeline_endpoints and bool(controller_app)
-    build = read_build_progress()
+    endpoints_connected = endpoints_ready and has_pipeline_endpoints
+    required_keys = _required_service_keys(config)
+    pipeline_state = _evaluate_pipeline(
+        services,
+        endpoints_ready=endpoints_connected,
+        required_keys=required_keys,
+    )
+    reconcile_stale_build(
+        pipeline_failed=pipeline_state["pipeline_failed"],
+        failed_services=pipeline_state["failed_services"],
+    )
+    build = _reconcile_build_progress(services, pipeline_state["failed_services"])
+    if build is None:
+        build = read_build_progress()
 
     return {
         "config_saved": config is not None,
@@ -448,10 +628,14 @@ def list_deployment_status() -> dict[str, Any]:
         "mode_summary": mode_summary(config),
         "build_plan_preview": build_plan(config) if config else [],
         "services": services,
-        "endpoints_ready": endpoints_ready and has_pipeline_endpoints,
+        "endpoints_ready": endpoints_connected,
         "controller_address": controller_address,
-        "pipeline_ready": pipeline_ready,
-        "ready_for_demo": pipeline_ready,
+        "pipeline_ready": pipeline_state["pipeline_ready"],
+        "pipeline_failed": pipeline_state["pipeline_failed"],
+        "failed_services": pipeline_state["failed_services"],
+        "pending_services": pipeline_state["pending_services"],
+        "running_services": pipeline_state["running_services"],
+        "ready_for_demo": pipeline_state["pipeline_ready"],
         "build": build,
         "build_in_progress": is_build_in_progress(),
         "config_path": str(DEPLOYMENT_CONFIG_JSON),

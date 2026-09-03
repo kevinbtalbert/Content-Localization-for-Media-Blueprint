@@ -5,59 +5,24 @@
 
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "@/app/components/atoms/Header";
 import Card from "@/app/components/atoms/Card";
-import Loader from "@/app/components/atoms/Loader";
+import {
+  type BuildStep,
+  type DeploymentStatus,
+  type StepStatus,
+  useDeploymentStatus,
+} from "@/app/hooks/useDeploymentStatus";
 
 type NimDeployMode = "SERVERLESS" | "BUNDLED";
 type S2sService = "EL_DUBBING" | "CAMB_DUBBING";
-type StepStatus = "pending" | "running" | "done" | "skipped" | "error";
-
-type BuildStep = {
-  id: string;
-  label: string;
-  status: StepStatus;
-  detail?: string;
-};
-
-type BuildProgress = {
-  in_progress?: boolean;
-  success?: boolean;
-  error?: string | null;
-  message?: string;
-  mode?: string;
-  steps?: BuildStep[];
-};
-
-type ServiceStatus = {
-  name: string;
-  configured: boolean;
-  skipped_reason?: string;
-  application: { id: string; status: string; subdomain: string | null } | null;
-};
 
 type SecretsSet = {
   ngc_api_key?: boolean;
   elevenlabs_api_key?: boolean;
   camb_api_key?: boolean;
-};
-
-type DeploymentStatus = {
-  config_saved: boolean;
-  config: Record<string, string | boolean> | null;
-  secrets_set: SecretsSet;
-  nim_deploy_mode: string | null;
-  mode_summary: { headline: string; detail: string };
-  build_plan_preview: BuildStep[];
-  services: Record<string, ServiceStatus>;
-  endpoints_ready: boolean;
-  controller_address: string | null;
-  pipeline_ready: boolean;
-  build: BuildProgress | null;
-  build_in_progress: boolean;
-  error?: string;
 };
 
 type SetupForm = {
@@ -131,17 +96,25 @@ function stepClass(status: StepStatus): string {
 }
 
 export default function ConfigurePage() {
-  const [status, setStatus] = useState<DeploymentStatus | null>(null);
+  const {
+    status,
+    initialLoading,
+    polling,
+    fetchError,
+    refresh,
+    startPolling,
+    pipelineReady,
+    pipelineFailed,
+    hasPriorBuild,
+  } = useDeploymentStatus({ pollWhilePending: true });
+
   const [form, setForm] = useState(defaultForm);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [polling, setPolling] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const applyStatusToForm = useCallback((data: DeploymentStatus) => {
     if (data.config) {
@@ -168,65 +141,38 @@ export default function ConfigurePage() {
     }
   }, []);
 
-  const refresh = useCallback(
-    async (silent = false) => {
-      if (!silent) {
-        setLoading(true);
-      }
-      setError(null);
-      try {
-        const response = await fetch("/api/deployment");
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to load status");
-        }
-        setStatus(data);
-        applyStatusToForm(data);
+  const applyBuildMessages = useCallback((data: DeploymentStatus | null) => {
+    if (!data) {
+      return;
+    }
+    const failed = Boolean(data.pipeline_failed || (data.failed_services?.length ?? 0) > 0);
+    const ready = Boolean(data.pipeline_ready);
+    const pending = (data.pending_services?.length ?? 0) > 0;
 
-        if (data.build_in_progress) {
-          setPolling(true);
-        } else if (data.build && data.build.success === false && data.build.error) {
-          setError(data.build.error);
-          setPolling(false);
-        } else if (data.pipeline_ready && data.build && !data.build.in_progress) {
-          if (data.build.success !== false) {
-            setMessage("Pipeline build finished. You can open Content Localization.");
-          }
-          setPolling(false);
-        } else if (data.build && !data.build.in_progress) {
-          setPolling(false);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load status");
-      } finally {
-        if (!silent) {
-          setLoading(false);
-        }
-      }
-    },
-    [applyStatusToForm],
-  );
-
-  useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only initial load
+    if (failed) {
+      const summary =
+        data.build?.error ||
+        data.failed_services?.map((svc) => `${svc.name} (${svc.status})`).join("; ") ||
+        "One or more backend applications failed.";
+      setPageError(summary);
+      setMessage(null);
+    } else if (ready && !data.build_in_progress && !pending) {
+      setPageError(null);
+      setMessage("Pipeline is ready. Return to Content Localization to process video.");
+    } else if (data.build?.error && !data.build_in_progress) {
+      setPageError(data.build.error);
+      setMessage(null);
+    } else if (!data.build_in_progress && !pending) {
+      setPageError(null);
+    }
   }, []);
 
   useEffect(() => {
-    if (!polling) {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      return;
+    if (status) {
+      applyStatusToForm(status);
+      applyBuildMessages(status);
     }
-    pollRef.current = setInterval(() => refresh(true), 4000);
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-      }
-    };
-  }, [polling, refresh]);
+  }, [status, applyStatusToForm, applyBuildMessages]);
 
   const formPayload = () => ({
     ...form,
@@ -236,7 +182,7 @@ export default function ConfigurePage() {
   const saveConfig = async () => {
     setBusy(true);
     setMessage(null);
-    setError(null);
+    setPageError(null);
     setValidationErrors([]);
     try {
       const response = await fetch("/api/deployment", {
@@ -251,7 +197,7 @@ export default function ConfigurePage() {
       setMessage("Configuration saved.");
       await refresh(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save configuration");
+      setPageError(err instanceof Error ? err.message : "Failed to save configuration");
     } finally {
       setBusy(false);
     }
@@ -260,7 +206,7 @@ export default function ConfigurePage() {
   const buildPipeline = async () => {
     setBusy(true);
     setMessage(null);
-    setError(null);
+    setPageError(null);
     setValidationErrors([]);
     setValidationWarnings([]);
     try {
@@ -289,10 +235,11 @@ export default function ConfigurePage() {
         return;
       }
       setMessage(data.message || "Pipeline build started.");
-      setPolling(true);
-      await refresh(true);
+      startPolling();
+      const updated = await refresh(true);
+      applyBuildMessages(updated);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Build failed to start");
+      setPageError(err instanceof Error ? err.message : "Build failed to start");
     } finally {
       setBusy(false);
     }
@@ -315,6 +262,18 @@ export default function ConfigurePage() {
       }));
 
   const showProgress = polling || status?.build_in_progress || (status?.build?.steps?.length ?? 0) > 0;
+  const buildActionLabel = hasPriorBuild ? "Redeploy pipeline" : "Build pipeline";
+  const displayError = pageError || fetchError;
+  const progressBorderClass = pipelineFailed
+    ? "border border-red-500/40"
+    : pipelineReady
+      ? "border border-green-500/40"
+      : "border border-[#76b900]/30";
+  const progressSummary = pipelineFailed
+    ? "Pipeline build incomplete — check backend application status below."
+    : pipelineReady
+      ? "Pipeline build completed successfully."
+      : status?.build?.message || "Build in progress…";
   const modeHeadline =
     form.nim_deploy_mode === "SERVERLESS"
       ? "Serverless: LipSync & ASD use NVIDIA NVCF — not apps in this project."
@@ -324,18 +283,43 @@ export default function ConfigurePage() {
     <div className="flex flex-col gap-4">
       <Header
         title="Content Localization Launchpad"
-        description="Configure your pipeline here, then build it. The localization app is created from these settings — nothing runs until you click Build pipeline."
+        description={
+          hasPriorBuild
+            ? "Reconfigure settings and redeploy the backend pipeline. Content Localization opens by default once built."
+            : "Configure your pipeline here, then build it. After the first successful deploy, the app opens to Content Localization."
+        }
       />
 
-      {loading && (
-        <Card padding="p-6">
-          <Loader />
+      {hasPriorBuild && (
+        <p className="text-sm">
+          <Link href="/demos/content-localization" className="text-[#76b900] underline">
+            ← Back to Content Localization
+          </Link>
+        </p>
+      )}
+
+      {(initialLoading || polling || status?.build_in_progress) && !fetchError && (
+        <Card padding="p-3" className="border border-neutral-700">
+          <p className="text-sm text-neutral-400">
+            {initialLoading ? "Loading deployment status…" : "Refreshing build status…"}
+          </p>
         </Card>
       )}
 
-      {error && (
+      {displayError && (
         <Card padding="p-4" className="border border-red-500/40">
-          <p className="text-sm text-red-400">{error}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-red-400">{displayError}</p>
+            <button
+              type="button"
+              className="text-sm text-neutral-300 underline"
+              onClick={() => {
+                void refresh();
+              }}
+            >
+              Retry
+            </button>
+          </div>
         </Card>
       )}
 
@@ -360,56 +344,21 @@ export default function ConfigurePage() {
         </Card>
       )}
 
-      {message && (
+      {message && pipelineReady && !pipelineFailed && (
         <Card padding="p-4" className="border border-green-500/40">
           <p className="text-sm text-green-400">{message}</p>
         </Card>
       )}
 
-      {!loading && (
-        <>
-          <Card padding="p-6" className="flex flex-col gap-2 border border-neutral-700">
-            <p className="text-sm font-medium text-neutral-200">{modeHeadline}</p>
-            <p className="text-sm text-neutral-400">
-              {status?.mode_summary?.detail ||
-                "Build runs in the background from this page. Speech-to-Speech and Controller always start as project applications."}
-            </p>
-          </Card>
+      <Card padding="p-6" className="flex flex-col gap-2 border border-neutral-700">
+        <p className="text-sm font-medium text-neutral-200">{modeHeadline}</p>
+        <p className="text-sm text-neutral-400">
+          {status?.mode_summary?.detail ||
+            "Build runs in the background from this page. Speech-to-Speech and Controller always start as project applications."}
+        </p>
+      </Card>
 
-          {showProgress && (
-            <Card padding="p-6" className="flex flex-col gap-3 border border-[#76b900]/30">
-              <div className="flex items-center justify-between gap-4">
-                <h3 className="text-lg font-semibold">Build progress</h3>
-                {(polling || status?.build_in_progress) && (
-                  <span className="text-xs text-[#76b900]">Updating every few seconds…</span>
-                )}
-              </div>
-              {status?.build?.message && (
-                <p className="text-sm text-neutral-300">{status.build.message}</p>
-              )}
-              {status?.build?.error && (
-                <p className="text-sm text-red-400">{status.build.error}</p>
-              )}
-              <ul className="flex flex-col gap-2">
-                {buildSteps.map((step) => (
-                  <li key={step.id} className={`flex gap-3 text-sm ${stepClass(step.status)}`}>
-                    <span className="w-4 shrink-0 font-mono">{stepIcon(step.status)}</span>
-                    <div>
-                      <p>{step.label}</p>
-                      {step.detail && <p className="text-xs text-neutral-500">{step.detail}</p>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              {(polling || status?.build_in_progress) && (
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded bg-neutral-800">
-                  <div className="h-full w-1/3 animate-pulse rounded bg-[#76b900]" />
-                </div>
-              )}
-            </Card>
-          )}
-
-          <Card padding="p-6" className="flex flex-col gap-4">
+      <Card padding="p-6" className="flex flex-col gap-4">
             <h3 className="text-lg font-semibold">NIM deployment mode</h3>
             <div className="flex flex-col gap-2">
               <label className="flex items-start gap-2 text-sm">
@@ -610,12 +559,12 @@ export default function ConfigurePage() {
             <button
               type="button"
               className="rounded bg-[#76b900] px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
-              disabled={busy || polling || status?.build_in_progress}
+              disabled={busy || (!pipelineFailed && (polling || Boolean(status?.build_in_progress)))}
               onClick={buildPipeline}
             >
-              {busy ? "Checking…" : polling || status?.build_in_progress ? "Building…" : "Build pipeline"}
+              {busy ? "Checking…" : !pipelineFailed && (polling || status?.build_in_progress) ? "Deploying…" : buildActionLabel}
             </button>
-            {status?.pipeline_ready && (
+            {hasPriorBuild && (
               <Link
                 href="/demos/content-localization"
                 className="rounded border border-[#76b900] px-4 py-2 text-sm text-[#76b900]"
@@ -625,19 +574,60 @@ export default function ConfigurePage() {
             )}
           </Card>
 
+          {showProgress && (
+            <Card padding="p-6" className={`flex flex-col gap-3 ${progressBorderClass}`}>
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="text-lg font-semibold">Build progress</h3>
+                {(polling || status?.build_in_progress) && (
+                  <span className="text-xs text-[#76b900]">Updating every few seconds…</span>
+                )}
+              </div>
+              <p
+                className={`text-sm ${
+                  pipelineFailed ? "text-red-400" : pipelineReady ? "text-green-400" : "text-neutral-300"
+                }`}
+              >
+                {progressSummary}
+              </p>
+              {status?.build?.error && pipelineFailed && (
+                <p className="text-sm text-red-300">{status.build.error}</p>
+              )}
+              <ul className="flex flex-col gap-2">
+                {buildSteps.map((step) => (
+                  <li key={step.id} className={`flex gap-3 text-sm ${stepClass(step.status)}`}>
+                    <span className="w-4 shrink-0 font-mono">{stepIcon(step.status)}</span>
+                    <div>
+                      <p>{step.label}</p>
+                      {step.detail && <p className="text-xs text-neutral-500">{step.detail}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {(polling || status?.build_in_progress) && !pipelineFailed && (
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded bg-neutral-800">
+                  <div className="h-full w-1/3 animate-pulse rounded bg-[#76b900]" />
+                </div>
+              )}
+            </Card>
+          )}
+
           {status && (
             <Card padding="p-6">
               <h3 className="mb-3 text-lg font-semibold">Backend applications</h3>
               <ul className="flex flex-col gap-2 text-sm">
-                {Object.entries(status.services).map(([key, svc]) => (
+                {Object.entries(status.services).map(([key, svc]) => {
+                  const appStatus = svc.application?.status || "";
+                  const isFailed = /fail/i.test(appStatus);
+                  return (
                   <li key={key} className="flex justify-between gap-4 border-b border-neutral-800 py-2">
                     <span>{svc.name}</span>
-                    <span className="text-right text-neutral-400">
+                    <span className={`text-right ${isFailed ? "text-red-400" : "text-neutral-400"}`}>
                       {svc.skipped_reason ||
                         (svc.application ? svc.application.status : "not started — build pipeline first")}
                     </span>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
               <p className="mt-4 text-xs text-neutral-500">
                 Endpoints connected: {status.endpoints_ready ? "yes" : "no"}
@@ -645,8 +635,6 @@ export default function ConfigurePage() {
               </p>
             </Card>
           )}
-        </>
-      )}
     </div>
   );
 }

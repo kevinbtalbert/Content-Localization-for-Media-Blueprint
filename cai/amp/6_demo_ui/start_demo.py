@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 from shutil import which
 
 PROJECT_ROOT = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
 sys.path.insert(0, str(PROJECT_ROOT))
+
+from cai.lib.amp_runtime import run_amp_entry  # noqa: E402
 
 DEMO_DIR = PROJECT_ROOT / "client" / "demos"
 SERVER_JS = DEMO_DIR / "dist" / "server.js"
@@ -54,8 +57,7 @@ def main() -> int:
 
     os.chdir(DEMO_DIR)
     print(f"Starting Launchpad UI: {node} {SERVER_JS} on 127.0.0.1:{port}", flush=True)
-    os.execv(node, [node, str(SERVER_JS)])
+    return subprocess.call([node, str(SERVER_JS)])
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+run_amp_entry(main, __name__)

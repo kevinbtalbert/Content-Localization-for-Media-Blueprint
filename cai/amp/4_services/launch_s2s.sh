@@ -24,12 +24,13 @@ load_config_defaults()
 project = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
 endpoint_file = project / "cai" / "config" / "s2s_endpoint.json"
 endpoint_file.parent.mkdir(parents=True, exist_ok=True)
+host = os.environ.get("CDSW_IP_ADDRESS", "127.0.0.1")
 endpoint_file.write_text(
     json.dumps(
         {
-            "host": os.environ["CDSW_IP_ADDRESS"],
+            "host": host,
             "port": int(os.environ.get("S2S_GRPC_API_PORT", "50050")),
-            "grpc_address": os.environ["S2S_SERVER"],
+            "grpc_address": os.environ.get("S2S_SERVER", f"{host}:{os.environ.get('S2S_GRPC_API_PORT', '50050')}"),
         },
         indent=2,
     )

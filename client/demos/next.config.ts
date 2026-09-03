@@ -12,7 +12,12 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/",
-        destination: "/demos/configure",
+        destination: "/demos/content-localization",
+        permanent: false,
+      },
+      {
+        source: "/demos",
+        destination: "/demos/content-localization",
         permanent: false,
       },
       {

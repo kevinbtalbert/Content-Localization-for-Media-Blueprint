@@ -3,31 +3,36 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 
-def exec_bash_script(relative_script: str) -> None:
-    """
-    Replace the current process with a bash launcher script.
-
-    CAI application scripts must use os.execv (not IPython ``!bash``) so the
-    NIM / gRPC foreground process keeps the application alive and failures
-    surface in Application Logs.
-    """
+def _script_path(relative_script: str) -> Path:
     project = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
     script = project / relative_script
     if not script.is_file():
         raise FileNotFoundError(f"Launcher script not found: {script}")
-    os.execv("/bin/bash", ["bash", str(script)])
+    return script
 
 
-def exec_serverless_nim_placeholder(service_label: str) -> None:
+def run_bash_script(relative_script: str) -> int:
     """
-    Replace the current process with a minimal app-port probe only.
+    Run a bash launcher and block until it exits.
 
-    Used when ``NIM_DEPLOY_MODE=SERVERLESS`` so LipSync/ASD AMP application
-    steps stay green without starting bundled GPU NIM processes.
+    CML applications execute Python entrypoints through the Jupyter kernel.
+    ``os.execv`` replaces that kernel and CAI reports ``APPLICATION_FAILED`` even
+    when the service script would otherwise run — use this helper instead.
+    """
+    return subprocess.call(["/bin/bash", str(_script_path(relative_script))])
+
+
+def run_serverless_nim_placeholder(service_label: str) -> int:
+    """
+    Hold CDSW_APP_PORT open for serverless mode without starting a GPU NIM.
+
+    Used when ``NIM_DEPLOY_MODE=SERVERLESS`` so LipSync/ASD application slots
+    stay healthy without bundled NIM processes.
     """
     project = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
     script = project / "cai" / "amp" / "4_services" / "run_cai_app_port.py"
@@ -37,7 +42,16 @@ def exec_serverless_nim_placeholder(service_label: str) -> None:
         f"holding CDSW_APP_PORT on 127.0.0.1:{port}",
         flush=True,
     )
-    os.execv(
-        sys.executable,
+    return subprocess.call(
         [sys.executable, str(script), "--port", str(port), "--service-label", service_label],
     )
+
+
+def exec_bash_script(relative_script: str) -> None:
+    """Deprecated: use ``run_bash_script`` from ``run_amp_entry`` instead."""
+    raise SystemExit(run_bash_script(relative_script))
+
+
+def exec_serverless_nim_placeholder(service_label: str) -> None:
+    """Deprecated: use ``run_serverless_nim_placeholder`` from ``run_amp_entry`` instead."""
+    raise SystemExit(run_serverless_nim_placeholder(service_label))

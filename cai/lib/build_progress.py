@@ -28,7 +28,37 @@ def read_build_progress() -> dict[str, Any] | None:
         return None
 
 
+STALE_BUILD_SECONDS = 30 * 60
+STALE_FAILED_BUILD_SECONDS = 5 * 60
+
+
+def reconcile_stale_build(
+    *,
+    pipeline_failed: bool = False,
+    failed_services: list[dict[str, str]] | None = None,
+) -> dict[str, Any] | None:
+    """Clear builds left in_progress after a crash or interrupted deploy."""
+    progress = read_build_progress()
+    if not progress or not progress.get("in_progress"):
+        return progress
+    updated = float(progress.get("updated_at") or progress.get("started_at") or 0)
+    if not updated:
+        return progress
+    age = _now() - updated
+    threshold = STALE_FAILED_BUILD_SECONDS if pipeline_failed else STALE_BUILD_SECONDS
+    if age <= threshold:
+        return progress
+    if pipeline_failed and failed_services:
+        summary = "; ".join(f"{item['name']} ({item['status']})" for item in failed_services)
+        message = f"Build incomplete: {summary}"
+    else:
+        message = "Previous build did not finish (timed out or interrupted). Redeploy from the Launchpad."
+    finish_build_progress(False, message)
+    return read_build_progress()
+
+
 def is_build_in_progress() -> bool:
+    reconcile_stale_build()
     progress = read_build_progress()
     return bool(progress and progress.get("in_progress"))
 
