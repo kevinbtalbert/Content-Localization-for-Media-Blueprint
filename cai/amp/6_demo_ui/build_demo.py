@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AMP session: build the Next.js demo application."""
+"""AMP session: build the Next.js web application."""
 
 from __future__ import annotations
 

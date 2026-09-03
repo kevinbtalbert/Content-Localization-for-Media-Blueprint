@@ -50,7 +50,7 @@ type DeploymentStatus = {
   secrets_set: SecretsSet;
   nim_deploy_mode: string | null;
   mode_summary: { headline: string; detail: string };
-  build_plan_preview: { id: string; label: string }[];
+  build_plan_preview: BuildStep[];
   services: Record<string, ServiceStatus>;
   endpoints_ready: boolean;
   controller_address: string | null;
@@ -305,11 +305,13 @@ export default function ConfigurePage() {
     return `Required — ${label}`;
   };
 
-  const buildSteps = status?.build?.steps?.length
+  const buildSteps: BuildStep[] = status?.build?.steps?.length
     ? status.build.steps
     : (status?.build_plan_preview || []).map((step) => ({
-        ...step,
-        status: "pending" as StepStatus,
+        id: step.id,
+        label: step.label,
+        status: step.status ?? ("pending" as StepStatus),
+        detail: step.detail,
       }));
 
   const showProgress = polling || status?.build_in_progress || (status?.build?.steps?.length ?? 0) > 0;
