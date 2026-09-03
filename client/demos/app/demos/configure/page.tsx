@@ -99,7 +99,6 @@ export default function ConfigurePage() {
   const {
     status,
     initialLoading,
-    polling,
     fetchError,
     refresh,
     startPolling,
@@ -252,16 +251,13 @@ export default function ConfigurePage() {
     return `Required — ${label}`;
   };
 
-  const buildSteps: BuildStep[] = status?.build?.steps?.length
-    ? status.build.steps
-    : (status?.build_plan_preview || []).map((step) => ({
-        id: step.id,
-        label: step.label,
-        status: step.status ?? ("pending" as StepStatus),
-        detail: step.detail,
-      }));
+  const buildSteps: BuildStep[] = status?.build?.steps?.length ? status.build.steps : [];
 
-  const showProgress = polling || status?.build_in_progress || (status?.build?.steps?.length ?? 0) > 0;
+  const deployActive = Boolean(
+    status?.deploy_active ??
+      (status?.build_in_progress || (status?.pending_services?.length ?? 0) > 0),
+  );
+  const showProgress = Boolean(status?.build_in_progress || buildSteps.length > 0);
   const buildActionLabel = hasPriorBuild ? "Redeploy pipeline" : "Build pipeline";
   const displayError = pageError || fetchError;
   const progressBorderClass = pipelineFailed
@@ -273,7 +269,9 @@ export default function ConfigurePage() {
     ? "Pipeline build incomplete — check backend application status below."
     : pipelineReady
       ? "Pipeline build completed successfully."
-      : status?.build?.message || "Build in progress…";
+      : status?.build_in_progress
+        ? status?.build?.message || "Build in progress…"
+        : status?.build?.message || "Previous build did not complete.";
   const modeHeadline =
     form.nim_deploy_mode === "SERVERLESS"
       ? "Serverless: LipSync & ASD use NVIDIA NVCF — not apps in this project."
@@ -285,8 +283,8 @@ export default function ConfigurePage() {
         title="Content Localization Launchpad"
         description={
           hasPriorBuild
-            ? "Reconfigure settings and redeploy the backend pipeline. Content Localization opens by default once built."
-            : "Configure your pipeline here, then build it. After the first successful deploy, the app opens to Content Localization."
+            ? "Reconfigure settings and redeploy the backend pipeline."
+            : "Configure your pipeline here, then build it. Nothing runs until you click Build pipeline."
         }
       />
 
@@ -298,11 +296,21 @@ export default function ConfigurePage() {
         </p>
       )}
 
-      {(initialLoading || polling || status?.build_in_progress) && !fetchError && (
+      {initialLoading && !fetchError && (
         <Card padding="p-3" className="border border-neutral-700">
-          <p className="text-sm text-neutral-400">
-            {initialLoading ? "Loading deployment status…" : "Refreshing build status…"}
-          </p>
+          <p className="text-sm text-neutral-400">Loading deployment status…</p>
+        </Card>
+      )}
+
+      {deployActive && status?.build_in_progress && !fetchError && !initialLoading && (
+        <Card padding="p-3" className="border border-[#76b900]/30">
+          <p className="text-sm text-neutral-400">Build in progress…</p>
+        </Card>
+      )}
+
+      {deployActive && !status?.build_in_progress && !fetchError && !initialLoading && (
+        <Card padding="p-3" className="border border-neutral-700">
+          <p className="text-sm text-neutral-400">Waiting for backend services to start…</p>
         </Card>
       )}
 
@@ -551,7 +559,7 @@ export default function ConfigurePage() {
             <button
               type="button"
               className="rounded bg-neutral-700 px-4 py-2 text-sm disabled:opacity-50"
-              disabled={busy || polling || status?.build_in_progress}
+              disabled={busy || Boolean(status?.build_in_progress)}
               onClick={saveConfig}
             >
               Save configuration
@@ -559,10 +567,10 @@ export default function ConfigurePage() {
             <button
               type="button"
               className="rounded bg-[#76b900] px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
-              disabled={busy || (!pipelineFailed && (polling || Boolean(status?.build_in_progress)))}
+              disabled={busy || Boolean(status?.build_in_progress)}
               onClick={buildPipeline}
             >
-              {busy ? "Checking…" : !pipelineFailed && (polling || status?.build_in_progress) ? "Deploying…" : buildActionLabel}
+              {busy ? "Checking…" : status?.build_in_progress ? "Deploying…" : buildActionLabel}
             </button>
             {hasPriorBuild && (
               <Link
@@ -578,7 +586,7 @@ export default function ConfigurePage() {
             <Card padding="p-6" className={`flex flex-col gap-3 ${progressBorderClass}`}>
               <div className="flex items-center justify-between gap-4">
                 <h3 className="text-lg font-semibold">Build progress</h3>
-                {(polling || status?.build_in_progress) && (
+                {(status?.build_in_progress || deployActive) && (
                   <span className="text-xs text-[#76b900]">Updating every few seconds…</span>
                 )}
               </div>
@@ -603,7 +611,7 @@ export default function ConfigurePage() {
                   </li>
                 ))}
               </ul>
-              {(polling || status?.build_in_progress) && !pipelineFailed && (
+              {status?.build_in_progress && !pipelineFailed && (
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded bg-neutral-800">
                   <div className="h-full w-1/3 animate-pulse rounded bg-[#76b900]" />
                 </div>

@@ -53,8 +53,10 @@ export type DeploymentStatus = {
   pipeline_failed: boolean;
   failed_services: FailedService[];
   pending_services: string[];
+  missing_services?: string[];
   build: BuildProgress | null;
   build_in_progress: boolean;
+  deploy_active?: boolean;
   error?: string;
 };
 
@@ -102,8 +104,10 @@ export function useDeploymentStatus(options: Options = {}) {
         setFetchError(null);
 
         const failed = Boolean(data.pipeline_failed || (data.failed_services?.length ?? 0) > 0);
-        const pending = (data.pending_services?.length ?? 0) > 0;
-        if (pollWhilePending && !failed && (data.build_in_progress || pending)) {
+        const deployActive = Boolean(
+          data.deploy_active ?? (data.build_in_progress || (data.pending_services?.length ?? 0) > 0),
+        );
+        if (pollWhilePending && !failed && deployActive) {
           setPolling(true);
         } else {
           setPolling(false);

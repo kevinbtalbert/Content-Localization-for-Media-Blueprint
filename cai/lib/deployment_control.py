@@ -198,11 +198,12 @@ def _evaluate_pipeline(
     failed_services = _collect_failed_services(services, required_keys)
     running_services: list[str] = []
     pending_services: list[str] = []
+    missing_services: list[str] = []
     for key in required_keys:
         svc = services.get(key, {})
         app = svc.get("application")
         if not app:
-            pending_services.append(str(svc.get("name", key)))
+            missing_services.append(str(svc.get("name", key)))
             continue
         app_status = app.get("status", "")
         if _is_app_running(app_status):
@@ -220,6 +221,7 @@ def _evaluate_pipeline(
         "failed_services": failed_services,
         "running_services": running_services,
         "pending_services": pending_services,
+        "missing_services": missing_services,
     }
 
 
@@ -615,6 +617,9 @@ def list_deployment_status() -> dict[str, Any]:
     reconcile_stale_build(
         pipeline_failed=pipeline_state["pipeline_failed"],
         failed_services=pipeline_state["failed_services"],
+        any_deployed_apps=bool(
+            pipeline_state["running_services"] or pipeline_state["pending_services"]
+        ),
     )
     build = _reconcile_build_progress(services, pipeline_state["failed_services"])
     if build is None:
@@ -634,10 +639,12 @@ def list_deployment_status() -> dict[str, Any]:
         "pipeline_failed": pipeline_state["pipeline_failed"],
         "failed_services": pipeline_state["failed_services"],
         "pending_services": pipeline_state["pending_services"],
+        "missing_services": pipeline_state["missing_services"],
         "running_services": pipeline_state["running_services"],
         "ready_for_demo": pipeline_state["pipeline_ready"],
         "build": build,
         "build_in_progress": is_build_in_progress(),
+        "deploy_active": is_build_in_progress() or bool(pipeline_state["pending_services"]),
         "config_path": str(DEPLOYMENT_CONFIG_JSON),
     }
 

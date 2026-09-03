@@ -36,6 +36,7 @@ def reconcile_stale_build(
     *,
     pipeline_failed: bool = False,
     failed_services: list[dict[str, str]] | None = None,
+    any_deployed_apps: bool = False,
 ) -> dict[str, Any] | None:
     """Clear builds left in_progress after a crash or interrupted deploy."""
     progress = read_build_progress()
@@ -45,6 +46,21 @@ def reconcile_stale_build(
     if not updated:
         return progress
     age = _now() - updated
+    if not any_deployed_apps and age > 120:
+        finish_build_progress(
+            False,
+            "Previous build did not finish. Click Build pipeline to try again.",
+        )
+        return read_build_progress()
+    if not any_deployed_apps:
+        steps = progress.get("steps") or []
+        any_step_started = any(step.get("status") in {"running", "done", "error", "skipped"} for step in steps)
+        if not any_step_started:
+            finish_build_progress(
+                False,
+                "Previous build did not start. Click Build pipeline to try again.",
+            )
+            return read_build_progress()
     threshold = STALE_FAILED_BUILD_SECONDS if pipeline_failed else STALE_BUILD_SECONDS
     if age <= threshold:
         return progress
