@@ -41,6 +41,7 @@ def main() -> int:
     os.environ.setdefault("NODE_ENV", "production")
     os.environ.setdefault("OUTPUT_DIR", str(PROJECT_ROOT / "volumes" / "demo-app"))
     os.environ.setdefault("INPUT_DIR", str(PROJECT_ROOT / "assets"))
+    os.environ.setdefault("VIDEOS_DIR", str(PROJECT_ROOT / "videos"))
 
     if not SERVER_JS.is_file():
         print(

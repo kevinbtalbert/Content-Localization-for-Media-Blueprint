@@ -22,6 +22,7 @@ import LinkButton from "../atoms/LinkButton";
 import { detectDownloadCodecId, detectStreamingCodecId } from "@/app/utils/codecConfig";
 import { useSerializerWorker } from "@/app/hooks/useSerializerWorker";
 import AdvancedSettings from "./AdvancedSettings";
+import VideoLibrary, { type VideoLibraryEntry } from "./VideoLibrary";
 import { PIPELINE_STATUS } from "@/app/api/socketHandlers/content-localization/pipelineStatus";
 
 const MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024; // 1GB in bytes
@@ -46,8 +47,6 @@ const fileToBase64 = (file: File): Promise<string> => {
     reader.onerror = (error) => reject(error);
   });
 };
-
-const DEFAULT_VIDEO_URL = `/api/inputs/${process.env.NEXT_PUBLIC_INPUT_FILE_NAME || "sample_video_streamable.mp4"}`;
 
 const PIPELINE_STATUS_LABELS: Record<PIPELINE_STATUS, string> = {
   [PIPELINE_STATUS.UPLOADING]: "Uploading",
@@ -90,8 +89,9 @@ const VideoUploadContainer = () => {
   const { onStreamEnd, addVideoChunk, noChunks } = useAudioVideoStream(isUploading, outputVideo);
   const fileUploadInputRef = useRef<HTMLInputElement>(null);
   const exampleVideoAbortRef = useRef<AbortController | null>(null);
-  const [selectedCustomVideo, setSelectedCustomVideo] = useState<string>(DEFAULT_VIDEO_URL);
-  const selectedCustomVideoRef = useRef(selectedCustomVideo);
+  const [selectedCustomVideo, setSelectedCustomVideo] = useState<string>("");
+  const [activeFilename, setActiveFilename] = useState<string | null>(null);
+  const [libraryReady, setLibraryReady] = useState(false);
   const videoUploadStartTime = useRef<number>(0);
   const shouldMarkSocketError = useRef(false);
   const indexRef = useRef(0);
@@ -199,21 +199,39 @@ const VideoUploadContainer = () => {
 
   const { serializeChunk } = useSerializerWorker(onSerialized, onSerializerError);
 
-  /** Fetches example video from URL; returns the File or null on abort/error. */
-  const fetchExampleVideo = useCallback(async (src: string, signal?: AbortSignal): Promise<File | null> => {
-    try {
-      return await fetchVideoAsFile(src, "input_video.mp4", signal);
-    } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") return null;
-      logger.error("Failed to fetch example video:", error);
-      return null;
-    }
-  }, []);
+  /** Load a library video into preview state and processing file handle. */
+  const loadVideoFromEntry = useCallback(
+    async (entry: Pick<VideoLibraryEntry, "url" | "filename">, signal?: AbortSignal): Promise<File | null> => {
+      exampleVideoAbortRef.current?.abort();
+      const controller = signal ? null : new AbortController();
+      const abortSignal = signal ?? controller!.signal;
+      if (controller) {
+        exampleVideoAbortRef.current = controller;
+      }
 
-  // Keep ref in sync so effect completion can read current value without stale closure
-  useEffect(() => {
-    selectedCustomVideoRef.current = selectedCustomVideo;
-  }, [selectedCustomVideo]);
+      setSelectedCustomVideo(entry.url);
+      setActiveFilename(entry.filename);
+      if (videoRef.current) {
+        videoRef.current.src = entry.url;
+        videoRef.current.load();
+      }
+
+      try {
+        const videoFile = await fetchVideoAsFile(entry.url, entry.filename, abortSignal);
+        setFile(videoFile);
+        setInputError(null);
+        return videoFile;
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return null;
+        }
+        logger.error("Failed to load video from library:", error);
+        setInputError("Failed to load the selected video.");
+        return null;
+      }
+    },
+    [],
+  );
 
   // Update language states when defaults are loaded
   useEffect(() => {
@@ -223,30 +241,45 @@ const VideoUploadContainer = () => {
     }
   }, [defaultSourceLanguage, defaultTargetLanguage, loading]);
 
-  // Load example video on component mount; cancel fetch if user selects custom video
+  // Restore the persisted active video from the server-side /videos library.
   useEffect(() => {
-    if (selectedCustomVideo !== DEFAULT_VIDEO_URL) {
-      return;
-    }
     const controller = new AbortController();
     exampleVideoAbortRef.current = controller;
-    const timeoutId = setTimeout(() => {
-      if (!videoRef.current) return;
-      const src = videoRef.current.getAttribute("src") || videoRef.current.currentSrc;
-      if (!src) return;
-      fetchExampleVideo(src, controller.signal).then((file) => {
-        const stillDefault = selectedCustomVideoRef.current === DEFAULT_VIDEO_URL && !controller.signal.aborted;
-        if (file !== null && stillDefault) {
-          setFile(file);
+
+    const restoreActiveVideo = async () => {
+      try {
+        const response = await fetch("/api/videos", { signal: controller.signal, cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load video library");
         }
-      });
-    }, 1000);
+        setLibraryReady(true);
+        if (!data.active) {
+          return;
+        }
+        const entry =
+          (data.videos as VideoLibraryEntry[]).find((video) => video.filename === data.active) ||
+          ({
+            filename: data.active,
+            url: `/api/videos/${encodeURIComponent(data.active)}`,
+          } as VideoLibraryEntry);
+        await loadVideoFromEntry(entry, controller.signal);
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+        logger.error("Failed to restore active video:", error);
+        setLibraryReady(true);
+      }
+    };
+
+    void restoreActiveVideo();
+
     return () => {
-      clearTimeout(timeoutId);
       controller.abort();
       exampleVideoAbortRef.current = null;
     };
-  }, [fetchExampleVideo, selectedCustomVideo]);
+  }, [loadVideoFromEntry]);
 
   // Cleanup websocket connection on component unmount
   useEffect(() => {
@@ -389,31 +422,37 @@ const VideoUploadContainer = () => {
    * Handles file selection from input element
    * Validates file type and sets up video preview
    */
-  const onFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
 
     setInputError(null);
 
-    if (file && file.type !== "video/mp4") {
+    if (selected && selected.type !== "video/mp4") {
       setInputError("Please upload an MP4 video file.");
-      e.target.value = ""; // reset the input
+      e.target.value = "";
       return;
     }
-    if (file && file.size > MAX_FILE_SIZE) {
+    if (selected && selected.size > MAX_FILE_SIZE) {
       setInputError(`File size should not exceed ${MAX_FILE_SIZE_LABEL}.`);
       e.target.value = "";
       return;
     }
-    if (file) {
-      setFile(file);
+    if (!selected) {
+      return;
+    }
 
-      if (videoRef.current) {
-        exampleVideoAbortRef.current?.abort();
-        const url = URL.createObjectURL(file);
-        videoRef.current.src = url;
-        videoRef.current.load();
-        setSelectedCustomVideo(url);
+    try {
+      const formData = new FormData();
+      formData.append("file", selected);
+      const response = await fetch("/api/videos", { method: "POST", body: formData });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to upload video");
       }
+      await loadVideoFromEntry({ url: data.url, filename: data.filename });
+    } catch (error) {
+      setInputError(error instanceof Error ? error.message : "Failed to upload video");
+      e.target.value = "";
     }
   };
 
@@ -421,14 +460,7 @@ const VideoUploadContainer = () => {
    * Resets component state to initial values
    * Disconnects WebSocket and loads default example video
    */
-  const handleReset = () => {
-    setFile(null);
-    setSelectedCustomVideo(DEFAULT_VIDEO_URL);
-    if (videoRef.current) {
-      videoRef.current.src = DEFAULT_VIDEO_URL;
-      videoRef.current.load();
-    }
-    setInputError(null);
+  const handleReset = async () => {
     setError(null);
     setPreprocessingWarning(null);
     setOutputFile(null);
@@ -445,20 +477,34 @@ const VideoUploadContainer = () => {
     }
     setInputError(null);
 
-    // Stop any in-progress audio/video reader and disconnect websocket
     stopAudioVideoReader();
     ws.disconnect();
     logger.info("Disconnected from websocket server on reset");
 
-    // Fetch the example video with an abort controller so a subsequent file
-    // selection (onFileSelected) can cancel this and prevent overwriting the
-    // user's new file with the example video.
-    const controller = new AbortController();
-    exampleVideoAbortRef.current = controller;
-    fetchExampleVideo(DEFAULT_VIDEO_URL, controller.signal).then((file) => {
-      const stillDefault = selectedCustomVideoRef.current === DEFAULT_VIDEO_URL && !controller.signal.aborted;
-      if (file !== null && stillDefault) setFile(file);
-    });
+    try {
+      const response = await fetch("/api/videos", { cache: "no-store" });
+      const data = await response.json();
+      if (response.ok && data.active) {
+        const entry =
+          (data.videos as VideoLibraryEntry[]).find((video) => video.filename === data.active) ||
+          ({
+            filename: data.active,
+            url: `/api/videos/${encodeURIComponent(data.active)}`,
+          } as VideoLibraryEntry);
+        await loadVideoFromEntry(entry);
+        return;
+      }
+    } catch (error) {
+      logger.error("Failed to restore active video on reset:", error);
+    }
+
+    setFile(null);
+    setActiveFilename(null);
+    setSelectedCustomVideo("");
+    if (videoRef.current) {
+      videoRef.current.removeAttribute("src");
+      videoRef.current.load();
+    }
   };
 
   const handleDownload = (fileUrl: string) => {
@@ -507,6 +553,23 @@ const VideoUploadContainer = () => {
               }
             />
             {inputError && <Banner type={BannerType.Error}>{inputError}</Banner>}
+
+            <VideoLibrary
+              activeFilename={activeFilename}
+              disabled={isUploading}
+              onSelect={(entry) => {
+                void loadVideoFromEntry(entry);
+              }}
+              onSampleLoaded={(entry) => {
+                void loadVideoFromEntry(entry);
+              }}
+            />
+
+            {!libraryReady && !file && (
+              <p className="mt-2 text-xs text-[color:var(--color-secondary-foreground)]">
+                Loading saved videos…
+              </p>
+            )}
 
             {/* Action Buttons */}
             <div className="flex gap-2 mt-4 justify-end">

@@ -29,6 +29,7 @@ node_modules
 # Sample videos are not stored in git (large). Fetch with scripts/misc/fetch_sample_assets.sh
 assets/sample_video.mp4
 assets/sample_video_streamable.mp4
+videos/
 
 # client/demos/.gitignore ignores this directory
 *.egg-info
