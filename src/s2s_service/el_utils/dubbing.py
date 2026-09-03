@@ -441,9 +441,7 @@ class ELDubbingService(S2SService):
             try:
                 response = audio_queue.get(timeout=keepalive_ping_interval_secs)
                 if isinstance(response, tuple) and response[0] == "error":
-                    context.abort(
-                        grpc.StatusCode.INTERNAL, f"ElevenLabs dubbing failed: {response[1]}"
-                    )
+                    raise RuntimeError(f"ElevenLabs dubbing failed: {response[1]}")
                 if response == "completed":
                     logger.info(
                         f"Received completed from queue, processing complete. "
@@ -585,10 +583,14 @@ class ELDubbingService(S2SService):
                 **el_kwargs,
             )
         except Exception as e:
-            os.remove(input_path)
+            if os.path.exists(input_path):
+                os.remove(input_path)
+            # context.abort() raises a bare Exception; do not replace the client-facing message.
+            if not context.is_active():
+                raise
             tb = traceback.format_exc()
             logger.error(f"Stream back from client failed in request id {request_id}: {e}\n{tb}")
-            context.abort(grpc.StatusCode.INTERNAL, f"Streamback failed: {e}\n{tb}")
+            context.abort(grpc.StatusCode.INTERNAL, f"{type(e).__name__}: {e}")
 
     @staticmethod
     def argsfactory(
