@@ -303,9 +303,20 @@ export function createLocalizationStream(
   const outputVideoFileStream = fs.createWriteStream(outputVideoFilePath);
   const ffmpegCommand = spawn("ffmpeg", getStreamingArgs(streamingCodecId));
   let processingEnded = false;
+  let ffmpegFailed = false;
 
-  // Drain stderr to prevent ffmpeg from blocking if the pipe buffer fills
-  ffmpegCommand.stderr?.resume();
+  ffmpegCommand.on("error", (err) => {
+    ffmpegFailed = true;
+    logger.error("[ContentLocalization] ffmpeg failed to start", { streamId, err: err.message });
+  });
+
+  // Log stderr for debugging; drain so ffmpeg does not block on a full pipe
+  ffmpegCommand.stderr?.on("data", (data: Buffer) => {
+    const line = data.toString().trim();
+    if (line) {
+      logger.debug("[ContentLocalization] ffmpeg", { streamId, line });
+    }
+  });
 
   ffmpegCommand.stdout.on("data", (data: Buffer) => {
     if (processingEnded) return;
@@ -336,8 +347,16 @@ export function createLocalizationStream(
       ffmpegCommand.stdin.end();
       processingEnded = true;
 
-      if (errorOccurred) {
+      if (errorOccurred || ffmpegFailed) {
         logger.error("[ContentLocalization] Skipping final result due to earlier error");
+        if (ffmpegFailed && !errorOccurred) {
+          sendData(
+            JSON.stringify({
+              type: "translate",
+              data: { error: "Video preview encoding failed (ffmpeg unavailable). Check server logs." },
+            }),
+          );
+        }
         return;
       }
 

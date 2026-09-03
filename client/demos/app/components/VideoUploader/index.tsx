@@ -434,9 +434,14 @@ const VideoUploadContainer = () => {
 
     videoUploadStartTime.current = Date.now();
 
-    // Connect to websocket when starting the upload
-    ws.connect();
     logger.info("Connecting to websocket server for video processing");
+    const socket = await ws.connect();
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setIsUploading(false);
+      setError("Could not connect to the processing pipeline. Check that the demo app is running and try again.");
+      onStreamEnd();
+      return;
+    }
   };
 
   /**

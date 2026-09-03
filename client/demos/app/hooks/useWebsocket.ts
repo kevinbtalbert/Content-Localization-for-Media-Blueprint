@@ -83,10 +83,10 @@ const createWebSocket = (url: string | URL, protocols?: string[]) => {
 
 export const socketProxyUrl = (path: string) => {
   if (typeof window !== "undefined") {
-    return `ws://${window.location.host}${path}`;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}${path}`;
   }
   return `ws://${path}`;
-  // return new URL([process.env.NEXT_PUBLIC_SOCKET_URL, path].join(""));
 };
 
 const useWebsocket = (
@@ -107,7 +107,11 @@ const useWebsocket = (
    * Uses exponential backoff for failed connection attempts
    */
   const connect = useCallback(
-    async (protocols: string[] | undefined = initialProtocols) => {
+    async (protocols: string[] | undefined = initialProtocols): Promise<WebSocket | null> => {
+      if (socket && socket.readyState !== WebSocket.CLOSED) {
+        socket.close();
+      }
+
       const url = path.startsWith("/") ? socketProxyUrl(path) : path;
       const nextSocket = createWebSocket(url, protocols);
       setSocket(nextSocket);
@@ -121,26 +125,30 @@ const useWebsocket = (
 
       if (ev.type === "open") {
         reconnectAttempts.current = reconnectRetries;
+        setStatus(getSocketStatus(nextSocket));
+        return nextSocket;
       }
 
-      if (ev.type === "close") {
-        const result = ev as WebSocketEventMap["close"];
+      const result = ev as WebSocketEventMap["close"];
 
-        // Normal close - don't attempt reconnection
-        if (result.code === 1000) return;
-
-        // Attempt reconnection with exponential backoff
-        if (reconnectAttempts.current < reconnectRetries) {
-          await sleep(backoffMs(1000, reconnectAttempts.current));
-
-          reconnectAttempts.current += 1;
-          return connect(protocols);
-        }
+      // Normal close - don't attempt reconnection
+      if (result.code === 1000) {
+        setStatus(getSocketStatus(nextSocket));
+        return null;
       }
 
-      return nextSocket;
+      // Attempt reconnection with exponential backoff
+      if (reconnectAttempts.current < reconnectRetries) {
+        await sleep(backoffMs(1000, reconnectAttempts.current));
+
+        reconnectAttempts.current += 1;
+        return connect(protocols);
+      }
+
+      setStatus(getSocketStatus(nextSocket));
+      return null;
     },
-    [initialProtocols, reconnectRetries, path],
+    [initialProtocols, reconnectRetries, path, socket],
   );
 
   /**
