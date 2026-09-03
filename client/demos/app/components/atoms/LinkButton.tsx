@@ -9,14 +9,20 @@ const LinkButton: React.FC<{
   children: React.ReactNode;
   onClick: () => void;
   variant?: "primary" | "secondary";
-}> = ({ children, onClick, variant = "primary" }) => {
+  disabled?: boolean;
+}> = ({ children, onClick, variant = "primary", disabled = false }) => {
   const variantClasses =
     variant === "primary"
       ? "text-[color:var(--color-interaction-primary-base-background)] hover:bg-[color:var(--color-interaction-hover-background)] focus-visible:bg-[color:var(--color-interaction-hover-background)]"
       : "text-[color:var(--color-text-secondary)] hover:bg-[color:var(--color-interaction-hover-background)] focus-visible:bg-[color:var(--color-interaction-hover-background)] opacity-80 hover:opacity-100";
 
   return (
-    <button className={`${BASE_STYLES} ${variantClasses}`} onClick={onClick}>
+    <button
+      type="button"
+      className={`${BASE_STYLES} ${variantClasses} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {children}
     </button>
   );
