@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "@/app/components/atoms/Header";
 import Card from "@/app/components/atoms/Card";
+import SecretInput from "@/app/components/atoms/SecretInput";
 import {
   type BuildStep,
   type DeploymentStatus,
@@ -400,16 +401,13 @@ export default function ConfigurePage() {
 
           <Card padding="p-6" className="flex flex-col gap-4">
             <h3 className="text-lg font-semibold">API keys</h3>
-            <label className="flex flex-col gap-1 text-sm">
-              NGC API key
-              <input
-                className={inputClass}
-                type="password"
-                value={form.ngc_api_key}
-                onChange={(e) => setForm({ ...form, ngc_api_key: e.target.value })}
-                placeholder={secretPlaceholder("ngc_api_key", "NGC key")}
-              />
-            </label>
+            <SecretInput
+              label="NGC API key"
+              className={inputClass}
+              value={form.ngc_api_key}
+              onChange={(ngc_api_key) => setForm({ ...form, ngc_api_key })}
+              placeholder={secretPlaceholder("ngc_api_key", "NGC key")}
+            />
             <label className="flex flex-col gap-1 text-sm">
               S2S backend
               <select
@@ -422,28 +420,22 @@ export default function ConfigurePage() {
               </select>
             </label>
             {form.s2s_service === "EL_DUBBING" && (
-              <label className="flex flex-col gap-1 text-sm">
-                ElevenLabs API key
-                <input
-                  className={inputClass}
-                  type="password"
-                  value={form.elevenlabs_api_key}
-                  onChange={(e) => setForm({ ...form, elevenlabs_api_key: e.target.value })}
-                  placeholder={secretPlaceholder("elevenlabs_api_key", "ElevenLabs key")}
-                />
-              </label>
+              <SecretInput
+                label="ElevenLabs API key"
+                className={inputClass}
+                value={form.elevenlabs_api_key}
+                onChange={(elevenlabs_api_key) => setForm({ ...form, elevenlabs_api_key })}
+                placeholder={secretPlaceholder("elevenlabs_api_key", "ElevenLabs key")}
+              />
             )}
             {form.s2s_service === "CAMB_DUBBING" && (
-              <label className="flex flex-col gap-1 text-sm">
-                CambAI API key
-                <input
-                  className={inputClass}
-                  type="password"
-                  value={form.camb_api_key}
-                  onChange={(e) => setForm({ ...form, camb_api_key: e.target.value })}
-                  placeholder={secretPlaceholder("camb_api_key", "CambAI key")}
-                />
-              </label>
+              <SecretInput
+                label="CambAI API key"
+                className={inputClass}
+                value={form.camb_api_key}
+                onChange={(camb_api_key) => setForm({ ...form, camb_api_key })}
+                placeholder={secretPlaceholder("camb_api_key", "CambAI key")}
+              />
             )}
           </Card>
 

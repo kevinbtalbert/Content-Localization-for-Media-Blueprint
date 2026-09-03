@@ -14,9 +14,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 from cai.lib.cai_common import apply_dotenv_to_os, write_dotenv_file
 from cai.lib.paths import ENDPOINTS_ENV
-from cai.lib.service_env import configure_python_env, load_config_defaults
+from cai.lib.service_env import load_config_defaults, require_generated_protos, write_service_launcher_env
 
-configure_python_env()
+require_generated_protos()
+write_service_launcher_env()
 load_config_defaults()
 apply_dotenv_to_os(ENDPOINTS_ENV)
 
@@ -45,13 +46,15 @@ nohup python3 "${project}/cai/amp/4_services/run_cai_app_port.py" \
   >>"${sidecar_log}" 2>&1 &
 echo "Started CAI app port probe on ${app_port} (log: ${sidecar_log})"
 
+# shellcheck source=/dev/null
+source "${project}/cai/config/service_launcher.env"
+# shellcheck source=/dev/null
+source "${project}/cai/config/runtime_endpoints.env" 2>/dev/null || true
+
 python="${project}/.venv/bin/python"
 if [[ ! -x "${python}" ]]; then
   python="$(command -v python3)"
 fi
-
-# shellcheck source=/dev/null
-source "${project}/cai/config/runtime_endpoints.env" 2>/dev/null || true
 
 exec "${python}" "${project}/src/controller_service/entrypoint.py" \
   --service-uri "${CDSW_IP_ADDRESS:-127.0.0.1}:${CONTROLLER_GRPC_API_PORT:-50056}" \

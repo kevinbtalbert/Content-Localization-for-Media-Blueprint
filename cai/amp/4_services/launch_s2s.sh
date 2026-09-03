@@ -16,9 +16,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
-from cai.lib.service_env import configure_python_env, load_config_defaults
+from cai.lib.service_env import load_config_defaults, require_generated_protos, write_service_launcher_env
 
-configure_python_env()
+require_generated_protos()
+write_service_launcher_env()
 load_config_defaults()
 
 project = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
@@ -47,6 +48,9 @@ nohup python3 "${project}/cai/amp/4_services/run_cai_app_port.py" \
   --service-label s2s \
   >>"${sidecar_log}" 2>&1 &
 echo "Started CAI app port probe on ${app_port} (log: ${sidecar_log})"
+
+# shellcheck source=/dev/null
+source "${project}/cai/config/service_launcher.env"
 
 python="${project}/.venv/bin/python"
 if [[ ! -x "${python}" ]]; then
