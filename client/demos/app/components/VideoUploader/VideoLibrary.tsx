@@ -17,10 +17,12 @@ import {
 import LinkButton from "../atoms/LinkButton";
 import ProgressBar from "../atoms/ProgressBar";
 import { SAMPLE_VIDEO_FILENAME, SAMPLE_VIDEO_URL } from "@/app/constants/videoLibrary";
+import { fetchJson } from "@/app/utils/fetchJson";
 import {
   type FileTransfer,
   fetchBlobWithProgress,
   formatBytes,
+  parseResponseJson,
   transferPercent,
   uploadFileWithProgress,
 } from "@/app/utils/transferProgress";
@@ -128,13 +130,9 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
   }, []);
 
   const refresh = useCallback(async () => {
-    const response = await fetch("/api/videos", { cache: "no-store" });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to load video library");
-    }
-    setLibrary(data as VideoLibraryState);
-    return data as VideoLibraryState;
+    const data = await fetchJson<VideoLibraryState>("/api/videos", { cache: "no-store" });
+    setLibrary(data);
+    return data;
   }, []);
 
   useEffect(() => {
@@ -172,10 +170,7 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
           },
           controller.signal,
         );
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to upload video");
-        }
+        const data = await parseResponseJson<{ filename: string; url: string }>(response);
 
         updateTransfer(file.name, null);
         const updated = await refresh();
@@ -269,10 +264,7 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
         },
         controller.signal,
       );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to save sample video");
-      }
+      const data = await parseResponseJson<{ filename: string; url: string }>(response);
 
       updateTransfer(sampleFilename, null);
       const updated = await refresh();
@@ -301,15 +293,11 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
     }
     setError(null);
     try {
-      const response = await fetch("/api/videos", {
+      await fetchJson("/api/videos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "select", filename: entry.filename }),
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to select video");
-      }
       await refresh();
       onSelect(entry);
     } catch (err) {

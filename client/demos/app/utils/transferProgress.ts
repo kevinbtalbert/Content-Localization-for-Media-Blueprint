@@ -59,6 +59,30 @@ export async function fetchBlobWithProgress(
   return new Blob(chunks, { type: response.headers.get("content-type") || undefined });
 }
 
+export async function parseResponseJson<T = unknown>(response: Response): Promise<T> {
+  const contentType = response.headers.get("content-type") || "";
+  const bodyText = await response.text();
+
+  if (!contentType.includes("application/json")) {
+    const snippet = bodyText.replace(/\s+/g, " ").trim().slice(0, 120);
+    throw new Error(
+      response.ok
+        ? `Expected JSON but received ${contentType || "unknown content type"} (${snippet})`
+        : `Request failed (HTTP ${response.status}): ${snippet || response.statusText}`,
+    );
+  }
+
+  const data = JSON.parse(bodyText) as T;
+  if (!response.ok) {
+    const message =
+      typeof data === "object" && data !== null && "error" in data
+        ? String((data as { error?: string }).error)
+        : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  return data;
+}
+
 export async function uploadFileWithProgress(
   url: string,
   file: File | Blob,

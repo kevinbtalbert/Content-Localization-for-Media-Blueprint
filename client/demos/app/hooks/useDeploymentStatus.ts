@@ -30,6 +30,7 @@ export type ServiceStatus = {
   name: string;
   configured: boolean;
   skipped_reason?: string;
+  detail?: string;
   application: { id: string; status: string; subdomain: string | null } | null;
 };
 

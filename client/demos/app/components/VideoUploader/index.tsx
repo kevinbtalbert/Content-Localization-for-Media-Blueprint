@@ -13,6 +13,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import useWebsocket from "@/app/hooks/useWebsocket";
 import logger from "@/app/utils/logger";
 import ProgressBar from "../atoms/ProgressBar";
+import { fetchJson } from "@/app/utils/fetchJson";
 import { fetchBlobWithProgress, transferPercent } from "@/app/utils/transferProgress";
 import useAudioVideoStream from "@/app/hooks/useAudioVideoStream";
 import VideoProcessingCard from "../atoms/VideoProcessingCard";
@@ -258,11 +259,10 @@ const VideoUploadContainer = () => {
 
     const restoreActiveVideo = async () => {
       try {
-        const response = await fetch("/api/videos", { signal: controller.signal, cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to load video library");
-        }
+        const data = await fetchJson<{
+          videos: VideoLibraryEntry[];
+          active: string | null;
+        }>("/api/videos", { signal: controller.signal, cache: "no-store" });
         setLibraryReady(true);
         if (!data.active) {
           return;
@@ -502,9 +502,10 @@ const VideoUploadContainer = () => {
     logger.info("Disconnected from websocket server on reset");
 
     try {
-      const response = await fetch("/api/videos", { cache: "no-store" });
-      const data = await response.json();
-      if (response.ok && data.active) {
+      const data = await fetchJson<{ active: string | null; videos: VideoLibraryEntry[] }>("/api/videos", {
+        cache: "no-store",
+      });
+      if (data.active) {
         const entry =
           (data.videos as VideoLibraryEntry[]).find((video) => video.filename === data.active) ||
           ({

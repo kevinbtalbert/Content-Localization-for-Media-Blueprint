@@ -23,11 +23,17 @@ def main() -> int:
     if (
         dist.is_file()
         and next_dir.is_dir()
+        and (next_dir / "server" / "app" / "api" / "videos" / "route.js").is_file()
         and not os.environ.get("FORCE_DEMO_BUILD", "").strip()
     ):
         print(f"✅ Web UI already built ({dist}) — skipping npm build")
         print("   Set FORCE_DEMO_BUILD=1 to rebuild after code changes.")
         return 0
+
+    if dist.is_file() and next_dir.is_dir():
+        videos_route = next_dir / "server" / "app" / "api" / "videos" / "route.js"
+        if not videos_route.is_file():
+            print("⚠️  Existing build is missing /api/videos — rebuilding Web UI …")
 
     env = {**os.environ, "NEXT_PUBLIC_INPUT_FILE_NAME": os.environ.get("DEFAULT_INPUT_FILE_NAME", "sample_video.mp4")}
     for cmd in (

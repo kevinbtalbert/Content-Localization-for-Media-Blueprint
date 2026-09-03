@@ -642,6 +642,25 @@ def build_pipeline(config: AppConfig | None = None) -> dict[str, Any]:
         raise
 
 
+def _model_cache_bytes(nim_type: str) -> int:
+    cache = PROJECT_ROOT / "volumes" / "models" / nim_type
+    if not cache.is_dir():
+        return 0
+    return sum(path.stat().st_size for path in cache.rglob("*") if path.is_file())
+
+
+def _model_cache_detail(nim_type: str, app_status: str | None) -> str | None:
+    if not app_status:
+        return None
+    status = app_status.upper()
+    if status in {"RUNNING", "APPLICATION_RUNNING"}:
+        return None
+    total = _model_cache_bytes(nim_type)
+    if total >= 1024 * 1024:
+        return f"model cache {total / (1024 * 1024):.1f} MB — first start can take 15–120+ min"
+    return f"model cache {max(total, 0) / 1024:.0f} KB — downloading weights from NGC (15–120+ min)"
+
+
 def list_deployment_status() -> dict[str, Any]:
     config = load_app_config()
     client = CMLClient()
@@ -658,6 +677,10 @@ def list_deployment_status() -> dict[str, Any]:
                 "application": None,
             }
         else:
+            app_status = app.status if app else None
+            detail = None
+            if key in {"lipsync", "asd"} and app:
+                detail = _model_cache_detail(key, app_status)
             services[key] = {
                 "name": spec["name"],
                 "configured": True,
@@ -666,6 +689,7 @@ def list_deployment_status() -> dict[str, Any]:
                     if app
                     else None
                 ),
+                "detail": detail,
             }
 
     endpoints_ready = ENDPOINTS_ENV.exists()

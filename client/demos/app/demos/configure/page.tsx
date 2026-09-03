@@ -649,6 +649,7 @@ export default function ConfigurePage() {
                     <span>{svc.name}</span>
                     <span className={`text-right ${isFailed ? "text-red-400" : "text-neutral-400"}`}>
                       {svc.skipped_reason ||
+                        svc.detail ||
                         (svc.application ? svc.application.status : "not started — build pipeline first")}
                     </span>
                   </li>
