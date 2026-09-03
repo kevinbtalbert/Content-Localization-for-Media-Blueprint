@@ -45,6 +45,8 @@ type SetupForm = {
   target_language_label: string;
 };
 
+const DEFAULT_ASD_NVCF_FUNCTION_ID = "f286f937-05c4-454b-8312-fba67a2a6fa7";
+
 const defaultForm: SetupForm = {
   nim_deploy_mode: "SERVERLESS",
   s2s_service: "EL_DUBBING",
@@ -56,13 +58,15 @@ const defaultForm: SetupForm = {
   default_source_language: "auto",
   default_target_language: "de",
   lipsync_nvidia_function_id: "",
-  asd_nvidia_function_id: "",
+  asd_nvidia_function_id: DEFAULT_ASD_NVCF_FUNCTION_ID,
   nvidia_serverless_grpc_host: "grpc.nvcf.nvidia.com",
   nvidia_serverless_grpc_port: "443",
   reference_app_enable_preprocessing: false,
   voice_name: "",
   target_language_label: "",
 };
+
+const AI_FOR_MEDIA_URL = "https://developer.nvidia.com/ai-for-media/private-access-program";
 
 const inputClass = "rounded border border-neutral-600 bg-neutral-900 px-3 py-2";
 
@@ -134,7 +138,9 @@ export default function ConfigurePage() {
         default_source_language: String(data.config!.default_source_language || prev.default_source_language),
         default_target_language: String(data.config!.default_target_language || prev.default_target_language),
         lipsync_nvidia_function_id: String(data.config!.lipsync_nvidia_function_id || ""),
-        asd_nvidia_function_id: String(data.config!.asd_nvidia_function_id || ""),
+        asd_nvidia_function_id: String(
+          data.config!.asd_nvidia_function_id || DEFAULT_ASD_NVCF_FUNCTION_ID,
+        ),
         nvidia_serverless_grpc_host: String(
           data.config!.nvidia_serverless_grpc_host || prev.nvidia_serverless_grpc_host,
         ),
@@ -182,6 +188,10 @@ export default function ConfigurePage() {
   const formPayload = () => ({
     ...form,
     s2s_default_target_language: form.default_target_language,
+    asd_nvidia_function_id:
+      form.nim_deploy_mode === "SERVERLESS" && !form.asd_nvidia_function_id.trim()
+        ? DEFAULT_ASD_NVCF_FUNCTION_ID
+        : form.asd_nvidia_function_id,
   });
 
   const saveConfig = async () => {
@@ -381,7 +391,14 @@ export default function ConfigurePage() {
                   className="mt-1"
                   name="nim_deploy_mode"
                   checked={form.nim_deploy_mode === "SERVERLESS"}
-                  onChange={() => setForm({ ...form, nim_deploy_mode: "SERVERLESS" })}
+                  onChange={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      nim_deploy_mode: "SERVERLESS",
+                      asd_nvidia_function_id:
+                        prev.asd_nvidia_function_id.trim() || DEFAULT_ASD_NVCF_FUNCTION_ID,
+                    }))
+                  }
                 />
                 <span>
                   <strong>Serverless</strong> — LipSync &amp; ASD call NVIDIA NVCF. Build only starts
@@ -513,6 +530,53 @@ export default function ConfigurePage() {
             </label>
           </Card>
 
+          {form.nim_deploy_mode === "SERVERLESS" && (
+            <Card padding="p-6" className="flex flex-col gap-4">
+              <h3 className="text-lg font-semibold">Serverless NVCF function IDs</h3>
+              <p className="text-xs text-neutral-500">
+                LipSync and ASD are separate NVCF functions on{" "}
+                <code className="text-neutral-400">grpc.nvcf.nvidia.com</code>. Each call sends a
+                different <code className="text-neutral-400">function-id</code> header with your NGC
+                API key.
+              </p>
+              <label className="flex flex-col gap-1 text-sm">
+                LipSync NVCF function ID <span className="text-red-400">*</span>
+                <input
+                  className={inputClass}
+                  required
+                  value={form.lipsync_nvidia_function_id}
+                  onChange={(e) => setForm({ ...form, lipsync_nvidia_function_id: e.target.value })}
+                  placeholder="UUID from NVIDIA AI for Media"
+                />
+                <span className="text-xs text-neutral-500">
+                  Required — no public catalog default. Request access via{" "}
+                  <a
+                    href={AI_FOR_MEDIA_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={externalKeyLinkClass}
+                  >
+                    NVIDIA AI for Media
+                  </a>
+                  .
+                </span>
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                ASD NVCF function ID <span className="text-red-400">*</span>
+                <input
+                  className={inputClass}
+                  required
+                  value={form.asd_nvidia_function_id}
+                  onChange={(e) => setForm({ ...form, asd_nvidia_function_id: e.target.value })}
+                />
+                <span className="text-xs text-neutral-500">
+                  Pre-filled with the blueprint catalog default. Change only if NVIDIA provided a
+                  different ID.
+                </span>
+              </label>
+            </Card>
+          )}
+
           {form.nim_deploy_mode === "BUNDLED" && (
             <Card padding="p-6" className="flex flex-col gap-4">
               <h3 className="text-lg font-semibold">Bundled NIM settings</h3>
@@ -527,51 +591,37 @@ export default function ConfigurePage() {
             </Card>
           )}
 
-          <Card padding="p-6" className="flex flex-col gap-4">
-            <button
-              type="button"
-              className="text-left text-sm text-neutral-400 hover:text-neutral-200"
-              onClick={() => setShowAdvanced((v) => !v)}
-            >
-              {showAdvanced ? "Hide" : "Show"} advanced serverless overrides
-            </button>
-            {showAdvanced && (
-              <div className="flex flex-col gap-4">
-                <label className="flex flex-col gap-1 text-sm">
-                  LipSync NVCF function ID (optional)
-                  <input
-                    className={inputClass}
-                    value={form.lipsync_nvidia_function_id}
-                    onChange={(e) => setForm({ ...form, lipsync_nvidia_function_id: e.target.value })}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  ASD NVCF function ID (optional)
-                  <input
-                    className={inputClass}
-                    value={form.asd_nvidia_function_id}
-                    onChange={(e) => setForm({ ...form, asd_nvidia_function_id: e.target.value })}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  NVCF gRPC host
-                  <input
-                    className={inputClass}
-                    value={form.nvidia_serverless_grpc_host}
-                    onChange={(e) => setForm({ ...form, nvidia_serverless_grpc_host: e.target.value })}
-                  />
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  NVCF gRPC port
-                  <input
-                    className={inputClass}
-                    value={form.nvidia_serverless_grpc_port}
-                    onChange={(e) => setForm({ ...form, nvidia_serverless_grpc_port: e.target.value })}
-                  />
-                </label>
-              </div>
-            )}
-          </Card>
+          {form.nim_deploy_mode === "SERVERLESS" && (
+            <Card padding="p-6" className="flex flex-col gap-4">
+              <button
+                type="button"
+                className="text-left text-sm text-neutral-400 hover:text-neutral-200"
+                onClick={() => setShowAdvanced((v) => !v)}
+              >
+                {showAdvanced ? "Hide" : "Show"} advanced NVCF endpoint overrides
+              </button>
+              {showAdvanced && (
+                <div className="flex flex-col gap-4">
+                  <label className="flex flex-col gap-1 text-sm">
+                    NVCF gRPC host
+                    <input
+                      className={inputClass}
+                      value={form.nvidia_serverless_grpc_host}
+                      onChange={(e) => setForm({ ...form, nvidia_serverless_grpc_host: e.target.value })}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm">
+                    NVCF gRPC port
+                    <input
+                      className={inputClass}
+                      value={form.nvidia_serverless_grpc_port}
+                      onChange={(e) => setForm({ ...form, nvidia_serverless_grpc_port: e.target.value })}
+                    />
+                  </label>
+                </div>
+              )}
+            </Card>
+          )}
 
           <Card padding="p-6" className="flex flex-wrap gap-3">
             <button

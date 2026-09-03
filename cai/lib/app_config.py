@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from cai.lib.cai_common import write_dotenv_file
+from cai.lib.deploy_mode import DEFAULT_ASD_NVCF_FUNCTION_ID
 from cai.lib.paths import CONFIG_DIR
 
 DEPLOYMENT_CONFIG_JSON = CONFIG_DIR / "deployment_config.json"
@@ -141,6 +142,10 @@ class AppConfig:
             data[key] = "********" if data.get(key) else ""
         return data
 
+    def effective_asd_nvidia_function_id(self) -> str:
+        """ASD serverless ID from config, or the built-in NVCF catalog default."""
+        return self.asd_nvidia_function_id.strip() or DEFAULT_ASD_NVCF_FUNCTION_ID
+
     def as_process_env(self) -> dict[str, str]:
         raw = self.to_dict()
         raw["reference_app_enable_preprocessing"] = (
@@ -152,6 +157,8 @@ class AppConfig:
             if value is None or value == "":
                 continue
             env[env_key] = str(value)
+        if self.nim_deploy_mode.upper() == "SERVERLESS":
+            env["ASD_NVIDIA_FUNCTION_ID"] = self.effective_asd_nvidia_function_id()
         # Keep demo + S2S defaults aligned
         env.setdefault("DEFAULT_TARGET_LANGUAGE", self.default_target_language)
         env.setdefault("S2S_DEFAULT_TARGET_LANGUAGE", self.s2s_default_target_language)
@@ -208,12 +215,10 @@ class AppConfig:
             if not self.lipsync_nvidia_function_id.strip():
                 errors.append(
                     "LipSync NVCF function ID is required for serverless mode "
-                    "(from NVIDIA AI for Media / build.nvidia.com)."
+                    "(from NVIDIA AI for Media — there is no public catalog default)."
                 )
-            if not self.asd_nvidia_function_id.strip():
-                warnings.append(
-                    "ASD NVCF function ID is empty — using the built-in default catalog ID."
-                )
+            if not self.effective_asd_nvidia_function_id():
+                errors.append("ASD NVCF function ID is required for serverless mode.")
             warnings.append(
                 "Serverless mode uses NVIDIA NVCF for LipSync and ASD — no GPU NIM apps are created in this project."
             )
