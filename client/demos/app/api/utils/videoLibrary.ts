@@ -5,10 +5,9 @@
 
 import fs from "fs";
 import path from "path";
+import { SAMPLE_VIDEO_FILENAME, SAMPLE_VIDEO_URL } from "../../constants/videoLibrary";
 
-export const SAMPLE_VIDEO_FILENAME = "sample_video_streamable.mp4";
-export const SAMPLE_VIDEO_URL =
-  "https://media.githubusercontent.com/media/NVIDIA-AI-Blueprints/content-localization/main/assets/sample_video_streamable.mp4";
+export { SAMPLE_VIDEO_FILENAME, SAMPLE_VIDEO_URL };
 
 export type ActiveVideoConfig = {
   filename: string;

@@ -13,12 +13,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
 from cai.lib.cai_common import apply_dotenv_to_os, write_dotenv_file
+from cai.lib.endpoint_resolver import prepare_controller_launch_env
 from cai.lib.paths import ENDPOINTS_ENV
 from cai.lib.service_env import load_config_defaults, require_generated_protos, write_service_launcher_env
 
 require_generated_protos()
 write_service_launcher_env()
 load_config_defaults()
+
+endpoints = prepare_controller_launch_env(wait_s=600)
 apply_dotenv_to_os(ENDPOINTS_ENV)
 
 host = os.environ.get("CDSW_IP_ADDRESS", "127.0.0.1")
@@ -36,6 +39,10 @@ meta.write_text(
 )
 print(f"Controller endpoint metadata: {meta}", flush=True)
 print(f"Controller gRPC will listen on {controller_endpoint}", flush=True)
+print(f"Downstream S2S_SERVER={endpoints.get('S2S_SERVER', '')}", flush=True)
+print(f"Downstream LIPSYNC_SERVER={endpoints.get('LIPSYNC_SERVER', '')}", flush=True)
+if endpoints.get("ASD_SERVER"):
+    print(f"Downstream ASD_SERVER={endpoints['ASD_SERVER']}", flush=True)
 PY
 
 app_port="${CDSW_APP_PORT:-8100}"
@@ -49,7 +56,7 @@ echo "Started CAI app port probe on ${app_port} (log: ${sidecar_log})"
 # shellcheck source=/dev/null
 source "${project}/cai/config/service_launcher.env"
 # shellcheck source=/dev/null
-source "${project}/cai/config/runtime_endpoints.env" 2>/dev/null || true
+source "${project}/cai/config/controller_endpoints.env"
 
 python="${project}/.venv/bin/python"
 if [[ ! -x "${python}" ]]; then
@@ -61,8 +68,8 @@ exec "${python}" "${project}/src/controller_service/entrypoint.py" \
   --max-concurrency "${CONTROLLER_MAX_CONCURRENCY:-1}" \
   --concurrency-mode "${CONTROLLER_GRPC_CONCURRENCY_MODE:-threading}" \
   --threads-per-process "${CONTROLLER_GRPC_THREADS_PER_PROCESS:-1}" \
-  --s2s-server "${S2S_SERVER:?S2S_SERVER must be set — run Wire Service Endpoints first}" \
-  --lipsync-server "${LIPSYNC_SERVER:?LIPSYNC_SERVER must be set — run Wire Service Endpoints first}" \
+  --s2s-server "${S2S_SERVER}" \
+  --lipsync-server "${LIPSYNC_SERVER}" \
   --lipsync-ssl-mode "${CONTROLLER_LIPSYNC_SSL_MODE:-DISABLED}" \
   --asd-ssl-mode "${CONTROLLER_ASD_SSL_MODE:-DISABLED}" \
   ${ASD_SERVER:+--asd-server "${ASD_SERVER}"}

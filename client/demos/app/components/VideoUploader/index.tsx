@@ -12,6 +12,8 @@ import VideoPreview from "../VideoPreview";
 import { useState, useEffect, useRef, useCallback } from "react";
 import useWebsocket from "@/app/hooks/useWebsocket";
 import logger from "@/app/utils/logger";
+import ProgressBar from "../atoms/ProgressBar";
+import { fetchBlobWithProgress, transferPercent } from "@/app/utils/transferProgress";
 import useAudioVideoStream from "@/app/hooks/useAudioVideoStream";
 import VideoProcessingCard from "../atoms/VideoProcessingCard";
 import useAudioVideoReader from "@/app/hooks/useAudioVideoReader";
@@ -22,7 +24,7 @@ import LinkButton from "../atoms/LinkButton";
 import { detectDownloadCodecId, detectStreamingCodecId } from "@/app/utils/codecConfig";
 import { useSerializerWorker } from "@/app/hooks/useSerializerWorker";
 import AdvancedSettings from "./AdvancedSettings";
-import VideoLibrary, { type VideoLibraryEntry } from "./VideoLibrary";
+import VideoLibrary, { type VideoLibraryEntry, type VideoLibraryHandle } from "./VideoLibrary";
 import { PIPELINE_STATUS } from "@/app/api/socketHandlers/content-localization/pipelineStatus";
 
 const MAX_FILE_SIZE = 1 * 1024 * 1024 * 1024; // 1GB in bytes
@@ -66,6 +68,9 @@ const VideoUploadContainer = () => {
   const [error, setError] = useState<string | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
   const [diarizationError, setDiarizationError] = useState<string | null>(null);
+  /** Chunk streaming progress while sending video to the pipeline (0–100). */
+  const [pipelineStreamPercent, setPipelineStreamPercent] = useState<number | null>(null);
+  const [outputDownload, setOutputDownload] = useState<{ percent: number; label: string } | null>(null);
   /** Non-fatal preprocessing warning (e.g. voice isolation or diarization failed). */
   const [preprocessingWarning, setPreprocessingWarning] = useState<string | null>(null);
   const [outputFile, setOutputFile] = useState<string | null>(null);
@@ -88,6 +93,7 @@ const VideoUploadContainer = () => {
   const [hasRunAtLeastOnce, setHasRunAtLeastOnce] = useState(false);
   const { onStreamEnd, addVideoChunk, noChunks } = useAudioVideoStream(isUploading, outputVideo);
   const fileUploadInputRef = useRef<HTMLInputElement>(null);
+  const videoLibraryRef = useRef<VideoLibraryHandle>(null);
   const exampleVideoAbortRef = useRef<AbortController | null>(null);
   const [selectedCustomVideo, setSelectedCustomVideo] = useState<string>("");
   const [activeFilename, setActiveFilename] = useState<string | null>(null);
@@ -163,6 +169,10 @@ const VideoUploadContainer = () => {
       if (ws.socket && message) {
         logger.debug(`Sending message to websocket: ${index}`);
         ws.socket.send(message);
+      }
+
+      if (totalPacketsRef.current > 0) {
+        setPipelineStreamPercent(transferPercent(index, totalPacketsRef.current));
       }
 
       if (ended.current && index >= totalPacketsRef.current) {
@@ -317,6 +327,10 @@ const VideoUploadContainer = () => {
     [stopAudioVideoReader, connected, handleWebsocketError],
   );
 
+  const onAudioVideoProgress = useCallback((sentChunks: number, totalChunks: number) => {
+    setPipelineStreamPercent(transferPercent(sentChunks, totalChunks));
+  }, []);
+
   const onAudioVideoError = useCallback(
     (error: string) => {
       logger.error("Audio/video reader error:", error);
@@ -380,7 +394,13 @@ const VideoUploadContainer = () => {
       totalPacketsRef.current = 0;
       indexRef.current = 0;
       sendLanguageConfig();
-      startAudioVideoReader(file, onAudioVideoData, onAudioVideoEnd, onAudioVideoError);
+      startAudioVideoReader(
+        file,
+        onAudioVideoData,
+        onAudioVideoEnd,
+        onAudioVideoError,
+        onAudioVideoProgress,
+      );
       shouldMarkSocketError.current = true;
     }
     // Callbacks are intentionally omitted to prevent restarting audio/video processing
@@ -400,6 +420,7 @@ const VideoUploadContainer = () => {
 
     setIsUploading(true);
     setPipelineStatus(null);
+    setPipelineStreamPercent(null);
     setError(null);
     setPreprocessingWarning(null);
     setOutputFile(null);
@@ -442,14 +463,11 @@ const VideoUploadContainer = () => {
     }
 
     try {
-      const formData = new FormData();
-      formData.append("file", selected);
-      const response = await fetch("/api/videos", { method: "POST", body: formData });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to upload video");
+      const entry = await videoLibraryRef.current?.uploadFile(selected);
+      if (!entry) {
+        return;
       }
-      await loadVideoFromEntry({ url: data.url, filename: data.filename });
+      await loadVideoFromEntry({ url: entry.url, filename: entry.filename });
     } catch (error) {
       setInputError(error instanceof Error ? error.message : "Failed to upload video");
       e.target.value = "";
@@ -465,6 +483,8 @@ const VideoUploadContainer = () => {
     setPreprocessingWarning(null);
     setOutputFile(null);
     setPipelineStatus(null);
+    setPipelineStreamPercent(null);
+    setOutputDownload(null);
     setIsUploading(false);
     setHasRunAtLeastOnce(false);
     setSourceLanguage(defaultSourceLanguage);
@@ -507,18 +527,37 @@ const VideoUploadContainer = () => {
     }
   };
 
-  const handleDownload = (fileUrl: string) => {
-    if (fileUrl) {
+  const handleDownload = async (fileUrl: string, downloadLabel?: string) => {
+    if (!fileUrl) {
+      return;
+    }
+    const filename = fileUrl.split("/").pop() || `output.${detectDownloadCodecId() === "default" ? "mp4" : "webm"}`;
+    const label = downloadLabel || `Downloading ${filename}`;
+    setOutputDownload({ percent: 0, label });
+    try {
+      const blob = await fetchBlobWithProgress(fileUrl, (loaded, total) => {
+        setOutputDownload({ percent: transferPercent(loaded, total), label });
+      });
+      const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = fileUrl;
-      a.download = fileUrl?.split("/").pop() || `output.${detectDownloadCodecId() === "default" ? "mp4" : "webm"}`;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
+      a.href = objectUrl;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      logger.error("Download failed:", error);
+      setError(error instanceof Error ? error.message : "Download failed");
+    } finally {
+      setOutputDownload(null);
     }
   };
+
+  const processingPercent =
+    pipelineStatus === PIPELINE_STATUS.UPLOADING || pipelineStreamPercent != null
+      ? pipelineStreamPercent
+      : null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -555,6 +594,7 @@ const VideoUploadContainer = () => {
             {inputError && <Banner type={BannerType.Error}>{inputError}</Banner>}
 
             <VideoLibrary
+              ref={videoLibraryRef}
               activeFilename={activeFilename}
               disabled={isUploading}
               onSelect={(entry) => {
@@ -688,7 +728,7 @@ const VideoUploadContainer = () => {
                   <VideoPreviewFooter>
                     <LinkButton onClick={() => handleDownload(outputFile)}>Download</LinkButton>
                     {detectDownloadCodecId() === "fallback" && fallbackOutputFile && (
-                      <LinkButton variant="secondary" onClick={() => handleDownload(fallbackOutputFile)}>
+                      <LinkButton variant="secondary" onClick={() => handleDownload(fallbackOutputFile, "Downloading WebM…")}>
                         Download WebM (Safari compatible)
                       </LinkButton>
                     )}
@@ -697,11 +737,18 @@ const VideoUploadContainer = () => {
               />
             )}
 
+            {outputDownload && (
+              <div className="mt-4">
+                <ProgressBar percent={outputDownload.percent} label={outputDownload.label} />
+              </div>
+            )}
+
             {/* Processing Status Indicators */}
             {noChunks && isUploading && (
               <VideoProcessingCard
                 showLoader={true}
                 message={pipelineStatus ? `${PIPELINE_STATUS_LABELS[pipelineStatus]}...` : "Processing..."}
+                percent={processingPercent}
               />
             )}
 

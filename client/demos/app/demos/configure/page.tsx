@@ -66,6 +66,11 @@ const defaultForm: SetupForm = {
 
 const inputClass = "rounded border border-neutral-600 bg-neutral-900 px-3 py-2";
 
+const SERVERLESS_API_KEY_URL = "https://build.nvidia.com/settings/api-keys";
+const NGC_API_KEY_URL = "https://org.ngc.nvidia.com/account/api-key";
+
+const externalKeyLinkClass = "text-xs text-neutral-400 underline hover:text-neutral-200";
+
 function stepIcon(status: StepStatus): string {
   switch (status) {
     case "done":
@@ -401,6 +406,27 @@ export default function ConfigurePage() {
 
           <Card padding="p-6" className="flex flex-col gap-4">
             <h3 className="text-lg font-semibold">API keys</h3>
+            <p className="text-xs text-neutral-500">
+              Need a key?{" "}
+              <a
+                href={SERVERLESS_API_KEY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={externalKeyLinkClass}
+              >
+                Generate Serverless API Key
+              </a>
+              {" · "}
+              <a
+                href={NGC_API_KEY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={externalKeyLinkClass}
+              >
+                Generate NGC API Key
+              </a>{" "}
+              <span className="text-neutral-600">(Bundled mode deploys NIMs locally)</span>
+            </p>
             <SecretInput
               label="NGC API key"
               className={inputClass}

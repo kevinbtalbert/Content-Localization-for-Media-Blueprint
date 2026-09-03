@@ -72,6 +72,7 @@ const useAudioVideoReader = (options: AudioVideoReaderOptions = {}) => {
       onData: (audio: ArrayBuffer, video?: ArrayBuffer) => void,
       onEnd: (totalPackets: number) => void,
       onError: (error: string) => void,
+      onProgress?: (sentChunks: number, totalChunks: number) => void,
     ) => {
       const { sampleRate = 16000, chunkDuration = 1 } = options;
       if (audioContext.current && audioContext.current.state === "running") {
@@ -137,23 +138,29 @@ const useAudioVideoReader = (options: AudioVideoReaderOptions = {}) => {
       const videoChunksList = await readVideoChunksSequentially(file, videoChunkSize);
       logger.info(`Generated ${videoChunksList.length} video chunks`);
 
+      const totalChunks = Math.max(audioChunksList.length, videoChunksList.length);
+      onProgress?.(0, totalChunks);
+
       // Send synchronized audio-video chunks
       const minChunks = Math.min(audioChunksList.length, videoChunksList.length);
       for (let i = 0; i < minChunks; i++) {
         onData(audioChunksList[i], videoChunksList[i]);
+        onProgress?.(i + 1, totalChunks);
       }
 
       // Send remaining video chunks (if any)
       for (let i = minChunks; i < videoChunksList.length; i++) {
         onData(new ArrayBuffer(0), videoChunksList[i]);
+        onProgress?.(i + 1, totalChunks);
       }
 
       // Send remaining audio chunks (if any)
       for (let i = minChunks; i < audioChunksList.length; i++) {
         onData(audioChunksList[i]);
+        onProgress?.(i + 1, totalChunks);
       }
 
-      onEnd(Math.max(audioChunksList.length, videoChunksList.length));
+      onEnd(totalChunks);
     },
     [options],
   );

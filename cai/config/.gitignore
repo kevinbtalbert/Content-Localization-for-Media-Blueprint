@@ -18,5 +18,8 @@ build_progress.json
 build.lock
 deployment_config.json
 app_environment.env
+service_launcher.env
+controller_endpoints.env
+active_video.json
 nim_deploy_mode.json
 runtime_context.json

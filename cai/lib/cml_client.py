@@ -152,3 +152,9 @@ class CMLClient:
         url = f"{self.base_url}/projects/{pid}/applications/{app_id}/restart"
         response = self.session.post(url, timeout=60)
         return response.status_code in {200, 202, 204}
+
+    def delete_application(self, app_id: str, project: str | None = None) -> bool:
+        pid = project or project_id()
+        url = f"{self.base_url}/projects/{pid}/applications/{app_id}"
+        response = self.session.delete(url, timeout=120)
+        return response.status_code in {200, 204, 404}

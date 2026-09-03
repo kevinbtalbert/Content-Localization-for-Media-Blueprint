@@ -78,6 +78,7 @@ def build_plan(config: AppConfig) -> list[dict[str, str]]:
     steps = [
         {"id": "validate", "label": "Validate configuration"},
         {"id": "save", "label": "Save configuration"},
+        {"id": "cleanup", "label": "Remove applications from the previous deploy mode"},
     ]
     if config.nim_deploy_mode == NIMDeployMode.SERVERLESS.value:
         steps.append(
@@ -291,15 +292,69 @@ def _find_app(apps: list[ApplicationInfo], name: str) -> ApplicationInfo | None:
     return None
 
 
+def _wait_for_app_removed(
+    client: CMLClient, name: str, *, timeout_s: int = 180
+) -> None:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        apps = client.list_applications()
+        if _find_app(apps, name) is None:
+            return
+        time.sleep(3)
+    raise TimeoutError(f"Timed out waiting for application {name!r} to be deleted")
+
+
+def _clear_runtime_endpoint_artifacts() -> None:
+    """Remove stale endpoint metadata before a fresh redeploy."""
+    for path in (
+        CONFIG_DIR / "s2s_endpoint.json",
+        CONFIG_DIR / "controller_endpoint.json",
+        ENDPOINTS_ENV,
+        CONFIG_DIR / "controller_endpoints.env",
+        PROJECT_ROOT / "cai" / "nim_endpoints.json",
+    ):
+        path.unlink(missing_ok=True)
+
+
+def _remove_orphaned_pipeline_apps(
+    client: CMLClient, config: AppConfig
+) -> list[dict[str, str]]:
+    """Delete pipeline apps that are not part of the selected deploy mode."""
+    required = set(_required_service_keys(config))
+    removed: list[dict[str, str]] = []
+    for key, spec in SERVICE_SPECS.items():
+        if key in required:
+            continue
+        apps = client.list_applications()
+        existing = _find_app(apps, spec["name"])
+        if not existing:
+            continue
+        if not client.delete_application(existing.id):
+            raise RuntimeError(f"Failed to delete orphaned application {spec['name']!r}")
+        _wait_for_app_removed(client, spec["name"])
+        removed.append({"service": key, "name": spec["name"], "id": existing.id})
+    return removed
+
+
 def _ensure_application(
     client: CMLClient,
     spec_key: str,
     config: AppConfig,
     apps: list[ApplicationInfo],
+    *,
+    recreate: bool = True,
 ) -> dict[str, Any]:
     spec = SERVICE_SPECS[spec_key]
     existing = _find_app(apps, spec["name"])
     env = config.app_environment()
+    had_existing = existing is not None
+
+    if existing and recreate:
+        if not client.delete_application(existing.id):
+            raise RuntimeError(f"Failed to delete existing application {spec['name']!r}")
+        _wait_for_app_removed(client, spec["name"])
+        apps = client.list_applications()
+        existing = None
 
     if existing:
         status = (existing.status or "").upper()
@@ -329,7 +384,7 @@ def _ensure_application(
     )
     return {
         "service": spec_key,
-        "action": "created",
+        "action": "recreated" if had_existing else "created",
         "id": created.id,
         "status": created.status,
     }
@@ -478,7 +533,21 @@ def build_pipeline(config: AppConfig | None = None) -> dict[str, Any]:
         save_app_config(config)
         set_step("save", "done")
 
+        _clear_runtime_endpoint_artifacts()
+
         client = CMLClient()
+
+        set_step(
+            "cleanup",
+            "running",
+            message="Removing applications not used in this deploy mode…",
+        )
+        removed = _remove_orphaned_pipeline_apps(client, config)
+        if removed:
+            detail = ", ".join(item["name"] for item in removed)
+            set_step("cleanup", "done", detail=f"Deleted: {detail}")
+        else:
+            set_step("cleanup", "done", detail="No unused applications to remove")
         apps = client.list_applications()
 
         if config.nim_deploy_mode == NIMDeployMode.SERVERLESS.value:
@@ -494,16 +563,21 @@ def build_pipeline(config: AppConfig | None = None) -> dict[str, Any]:
             set_step("serverless_nims", "done", detail="Using NVIDIA hosted NVCF APIs")
         else:
             for key in ("lipsync", "asd"):
-                set_step(key, "running", message=f"Creating or restarting {SERVICE_SPECS[key]['name']}…")
+                spec_name = SERVICE_SPECS[key]["name"]
+                verb = "Recreating" if _find_app(apps, spec_name) else "Creating"
+                set_step(key, "running", message=f"{verb} {spec_name}…")
                 result = _ensure_application(client, key, config, apps)
                 app_results.append(result)
                 set_step(key, "done", detail=f"{result['action']} ({result.get('status', 'unknown')})")
-            apps = client.list_applications()
+                apps = client.list_applications()
 
-        set_step("s2s", "running", message="Creating or restarting Speech-to-Speech service…")
+        spec_name = SERVICE_SPECS["s2s"]["name"]
+        verb = "Recreating" if _find_app(apps, spec_name) else "Creating"
+        set_step("s2s", "running", message=f"{verb} {spec_name}…")
         s2s_result = _ensure_application(client, "s2s", config, apps)
         app_results.append(s2s_result)
         set_step("s2s", "done", detail=f"{s2s_result['action']} ({s2s_result.get('status', 'unknown')})")
+        apps = client.list_applications()
 
         set_step(
             "wait_s2s",
@@ -539,8 +613,10 @@ def build_pipeline(config: AppConfig | None = None) -> dict[str, Any]:
         )
         set_step("wire", "done", detail="Runtime endpoints saved")
 
-        set_step("controller", "running", message="Creating or restarting Controller service…")
         apps = client.list_applications()
+        controller_name = SERVICE_SPECS["controller"]["name"]
+        verb = "Recreating" if _find_app(apps, controller_name) else "Creating"
+        set_step("controller", "running", message=f"{verb} {controller_name}…")
         controller_result = _ensure_application(client, "controller", config, apps)
         app_results.append(controller_result)
         set_step(
