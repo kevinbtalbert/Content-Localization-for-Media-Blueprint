@@ -27,21 +27,25 @@ def _apply_saved_config() -> None:
 def main() -> int:
     try:
         from cai.lib.cai_common import apply_dotenv_to_os  # noqa: WPS433
-        from cai.lib.paths import ENDPOINTS_ENV  # noqa: WPS433
+        from cai.lib.paths import ENDPOINTS_ENV, ensure_cai_dirs, media_dir  # noqa: WPS433
         from cai.lib.runtime_env import log_runtime_context  # noqa: WPS433
 
         log_runtime_context()
         _apply_saved_config()
         apply_dotenv_to_os(ENDPOINTS_ENV)
+        ensure_cai_dirs()
+        media_path = media_dir()
     except Exception as exc:
         print(f"WARNING: startup configuration step failed: {exc}", flush=True)
+        media_path = PROJECT_ROOT / "media"
 
     port = os.environ.get("CDSW_APP_PORT") or os.environ.get("PORT") or "8080"
     os.environ["PORT"] = str(port)
     os.environ.setdefault("NODE_ENV", "production")
     os.environ.setdefault("OUTPUT_DIR", str(PROJECT_ROOT / "volumes" / "demo-app"))
     os.environ.setdefault("INPUT_DIR", str(PROJECT_ROOT / "assets"))
-    os.environ.setdefault("VIDEOS_DIR", str(PROJECT_ROOT / "videos"))
+    os.environ.setdefault("MEDIA_DIR", str(media_path))
+    os.environ.setdefault("VIDEOS_DIR", os.environ["MEDIA_DIR"])
 
     if not SERVER_JS.is_file():
         print(

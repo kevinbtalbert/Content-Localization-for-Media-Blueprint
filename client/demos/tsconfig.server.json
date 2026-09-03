@@ -9,5 +9,10 @@
     "noEmit": false,
     "moduleResolution": "node"
   },
-  "include": ["app/server.ts"]
+  "include": [
+    "app/server.ts",
+    "app/server/**/*.ts",
+    "app/api/utils/mediaLibrary.ts",
+    "app/constants/videoLibrary.ts"
+  ]
 }

@@ -27,7 +27,7 @@ from cai.lib.build_progress import (
 from cai.lib.cai_common import write_dotenv_file
 from cai.lib.cml_client import ApplicationInfo, CMLClient
 from cai.lib.deploy_mode import NIMDeployMode, serverless_runtime_endpoints
-from cai.lib.paths import CONFIG_DIR, ENDPOINTS_ENV, PROJECT_ROOT
+from cai.lib.paths import CONFIG_DIR, ENDPOINTS_ENV, PROJECT_ROOT, ensure_cai_dirs
 
 DeploymentConfig = AppConfig
 load_deployment_config = load_app_config
@@ -523,6 +523,7 @@ def build_pipeline(config: AppConfig | None = None) -> dict[str, Any]:
     app_results: list[dict[str, Any]] = []
 
     try:
+        ensure_cai_dirs()
         set_step("validate", "running", message="Checking required keys and settings…")
         validation = config.validate_for_build()
         if not validation["valid"]:

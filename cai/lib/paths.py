@@ -15,7 +15,16 @@ VENV_PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python"
 NIM_VENV_PYTHON = PROJECT_ROOT / ".venv-nim" / "bin" / "python"
 
 
+def media_dir() -> Path:
+    """Writable folder for user media (default: /home/cdsw/media on CAI)."""
+    override = (os.environ.get("MEDIA_DIR") or os.environ.get("VIDEOS_DIR") or "").strip()
+    if override:
+        return Path(override)
+    return PROJECT_ROOT / "media"
+
+
 def ensure_cai_dirs() -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    media_dir().mkdir(parents=True, exist_ok=True)
     (PROJECT_ROOT / "volumes" / "models" / "lipsync").mkdir(parents=True, exist_ok=True)
     (PROJECT_ROOT / "volumes" / "models" / "asd").mkdir(parents=True, exist_ok=True)

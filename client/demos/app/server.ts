@@ -14,6 +14,7 @@ import next from "next";
 import { WebSocketServer } from "ws";
 import { applyPersistedConfigToProcessEnv } from "./api/utils/persistedConfig";
 import socketHandlers from "./api/socketHandlers";
+import { handleMediaApi } from "./server/mediaRoutes";
 import logger from "./utils/logger";
 
 applyPersistedConfigToProcessEnv();
@@ -27,8 +28,21 @@ const WEBSOCKET_PATH_PREFIX = "/api/ws";
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
-    const parsedUrl = parse(req.url!, true);
-    handle(req, res, parsedUrl);
+    void (async () => {
+      try {
+        if (await handleMediaApi(req, res)) {
+          return;
+        }
+        const parsedUrl = parse(req.url!, true);
+        handle(req, res, parsedUrl);
+      } catch (error) {
+        logger.error("[server] request failed:", error);
+        if (!res.headersSent) {
+          res.statusCode = 500;
+          res.end("Internal Server Error");
+        }
+      }
+    })();
   }).listen(port, "127.0.0.1");
 
   const wss = new WebSocketServer({

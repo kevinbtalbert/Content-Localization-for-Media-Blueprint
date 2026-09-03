@@ -262,7 +262,7 @@ const VideoUploadContainer = () => {
         const data = await fetchJson<{
           videos: VideoLibraryEntry[];
           active: string | null;
-        }>("/api/videos", { signal: controller.signal, cache: "no-store" });
+        }>("/api/media", { signal: controller.signal, cache: "no-store" });
         setLibraryReady(true);
         if (!data.active) {
           return;
@@ -271,7 +271,7 @@ const VideoUploadContainer = () => {
           (data.videos as VideoLibraryEntry[]).find((video) => video.filename === data.active) ||
           ({
             filename: data.active,
-            url: `/api/videos/${encodeURIComponent(data.active)}`,
+            url: `/api/media/${encodeURIComponent(data.active)}`,
           } as VideoLibraryEntry);
         await loadVideoFromEntry(entry, controller.signal);
       } catch (error) {
@@ -502,7 +502,7 @@ const VideoUploadContainer = () => {
     logger.info("Disconnected from websocket server on reset");
 
     try {
-      const data = await fetchJson<{ active: string | null; videos: VideoLibraryEntry[] }>("/api/videos", {
+      const data = await fetchJson<{ active: string | null; videos: VideoLibraryEntry[] }>("/api/media", {
         cache: "no-store",
       });
       if (data.active) {
@@ -510,7 +510,7 @@ const VideoUploadContainer = () => {
           (data.videos as VideoLibraryEntry[]).find((video) => video.filename === data.active) ||
           ({
             filename: data.active,
-            url: `/api/videos/${encodeURIComponent(data.active)}`,
+            url: `/api/media/${encodeURIComponent(data.active)}`,
           } as VideoLibraryEntry);
         await loadVideoFromEntry(entry);
         return;

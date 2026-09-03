@@ -8,6 +8,22 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   output: "standalone",
+  async rewrites() {
+    return [
+      {
+        source: "/api/videos/upload",
+        destination: "/api/media/upload",
+      },
+      {
+        source: "/api/videos/:filename",
+        destination: "/api/media/:filename",
+      },
+      {
+        source: "/api/videos",
+        destination: "/api/media",
+      },
+    ];
+  },
   async redirects() {
     return [
       {

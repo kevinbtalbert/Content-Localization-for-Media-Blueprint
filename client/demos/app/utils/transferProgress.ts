@@ -92,7 +92,8 @@ export async function uploadFileWithProgress(
 ): Promise<Response> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
+    const separator = url.includes("?") ? "&" : "?";
+    xhr.open("POST", `${url}${separator}filename=${encodeURIComponent(filename)}`);
     if (signal) {
       if (signal.aborted) {
         reject(new DOMException("Aborted", "AbortError"));
@@ -125,9 +126,8 @@ export async function uploadFileWithProgress(
     xhr.onerror = () => reject(new Error("Upload failed"));
     xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
 
-    const formData = new FormData();
-    formData.append("file", file, filename);
-    xhr.send(formData);
+    xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+    xhr.send(file);
   });
 }
 

@@ -71,7 +71,7 @@ function mergeLibraryEntries(videos: VideoLibraryEntry[], transfers: Record<stri
         filename: transfer.filename,
         size: transfer.bytesTotal ?? transfer.bytesLoaded,
         modified_at: new Date().toISOString(),
-        url: `/api/videos/${encodeURIComponent(transfer.filename)}`,
+        url: `/api/media/${encodeURIComponent(transfer.filename)}`,
         is_sample: transfer.filename === SAMPLE_VIDEO_FILENAME,
         transfer,
       });
@@ -130,7 +130,7 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
   }, []);
 
   const refresh = useCallback(async () => {
-    const data = await fetchJson<VideoLibraryState>("/api/videos", { cache: "no-store" });
+    const data = await fetchJson<VideoLibraryState>("/api/media", { cache: "no-store" });
     setLibrary(data);
     return data;
   }, []);
@@ -157,7 +157,7 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
 
       try {
         const response = await uploadFileWithProgress(
-          "/api/videos",
+          "/api/media/upload",
           file,
           file.name,
           (loaded, total) => {
@@ -251,7 +251,7 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
       });
 
       const response = await uploadFileWithProgress(
-        "/api/videos",
+        "/api/media/upload",
         sampleFile,
         sampleFilename,
         (loaded, total) => {
@@ -293,7 +293,7 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
     }
     setError(null);
     try {
-      await fetchJson("/api/videos", {
+      await fetchJson("/api/media", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "select", filename: entry.filename }),
@@ -328,8 +328,9 @@ const VideoLibrary = forwardRef<VideoLibraryHandle, Props>(function VideoLibrary
         </LinkButton>
       </div>
       <p className="mb-3 text-xs text-[color:var(--color-secondary-foreground)]">
-        Videos are stored in the project <code className="text-[color:var(--color-primary-foreground)]">/videos</code>{" "}
-        folder. The active video is remembered until you upload or select another.
+        Videos are stored in{" "}
+        <code className="text-[color:var(--color-primary-foreground)]">/home/cdsw/media</code> on this project.
+        The active video is remembered until you upload or select another.
       </p>
       {error && <p className="mb-2 text-xs text-[color:var(--color-feedback-danger-foreground)]">{error}</p>}
       {!library ? (
