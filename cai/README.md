@@ -270,6 +270,7 @@ See the main [README.md](../README.md) for additional local development options.
 | Docker daemon not running during build | Start Docker Desktop; `docker info` must work before `docker build` |
 | `docker login` or NIM pull fails | Check NGC key and LipSync private access; never commit the key — use `export` in shell only |
 | NIM application fails at startup | Verify `NGC_API_KEY`; first start downloads models (15–30 min) |
+| NIM exits after Triton banner, no `:8004`/`:8005`, `df /dev/shm` shows **64M** | **Raise project shared memory** — Project Settings → Engine → Advanced → **Shared Memory Limit** → `8192` MB (8 GB) or higher; restart sessions and GPU applications. LipSync/ASD need ~4–8 GB `/dev/shm` (Docker uses `--shm-size=8g`; CAI default is 64 MB). |
 | Controller cannot reach NIM | Check `cai/config/runtime_endpoints.env` pod IPs; verify network policy allows gRPC between pods |
 | AMP timeout on NIM startup | First NIM start downloads models — allow 15–30 min; check NGC key and LipSync private access |
 | Single GPU only | Deploy LipSync only; use `bypass_asd=True` in client requests |

@@ -36,8 +36,8 @@ WORK="${root}/build/nim-prefetch-work"
 TIMEOUT_S="${NIM_PREFETCH_TIMEOUT_S:-7200}"
 MIN_BYTES=1048576
 # Minimum staged cache after /v1/health/ready (override if your language profile is smaller).
-LIPSYNC_MIN_CACHE_BYTES="${NIM_PREFETCH_MIN_BYTES_LIPSYNC:-$((3 * 1024 * 1024 * 1024))}"
-ASD_MIN_CACHE_BYTES="${NIM_PREFETCH_MIN_BYTES_ASD:-$((2 * 1024 * 1024 * 1024))}"
+LIPSYNC_MIN_CACHE_BYTES="${NIM_PREFETCH_MIN_BYTES_LIPSYNC:-$((500 * 1024 * 1024))}"
+ASD_MIN_CACHE_BYTES="${NIM_PREFETCH_MIN_BYTES_ASD:-$((350 * 1024 * 1024))}"
 
 print_prefetch_plan() {
   echo "=== NIM model prefetch plan ==="
