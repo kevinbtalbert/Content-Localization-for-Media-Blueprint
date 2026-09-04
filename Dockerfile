@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1
 # Unified Content Localization image for Docker Hub and Cloudera AI Workbench.
 #
-# Build (requires NGC login for nvcr.io NIM stages):
+# Build (requires NGC login for nvcr.io NIM stages + model prefetch):
 #   echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
-#   docker build -t <dockerhub-user>/content-localization:1.2.0 .
+#   export NGC_API_KEY=...
+#   ./scripts/docker/build-content-localization-image.sh
+# Or manually:
+#   ./scripts/docker/prefetch-nim-model-caches.sh
+#   docker build -t content-localization:1.2.0-turing .
 # Push:
 #   docker push <dockerhub-user>/content-localization:1.2.0
 #
@@ -111,6 +115,14 @@ RUN --mount=from=nim-asd,source=/,target=/nim-src,readonly \
     done; \
     bash /tmp/record-nim-bundle-entrypoint.sh "${NIM_BUNDLE_ROOT}/asd"
 
+# Baked NIM model weights (prefetch on build host — see scripts/docker/prefetch-nim-model-caches.sh).
+COPY build/nim-model-cache/lipsync /opt/nvidia-nim/baked-model-cache/lipsync
+COPY build/nim-model-cache/asd /opt/nvidia-nim/baked-model-cache/asd
+RUN set -eux; \
+    test -n "$(ls -A /opt/nvidia-nim/baked-model-cache/lipsync)"; \
+    test -n "$(ls -A /opt/nvidia-nim/baked-model-cache/asd)"; \
+    chown -R cdsw:cdsw /opt/nvidia-nim/baked-model-cache
+
 WORKDIR ${APP_ROOT}
 COPY pyproject.toml uv.lock README.md ./
 COPY protos ./protos
@@ -124,10 +136,11 @@ COPY scripts/docker ./scripts/docker
 RUN chmod +x scripts/docker/*.sh && \
     uv sync --extra test && \
     bash protos/generate_protos.sh && \
-    mkdir -p /var/lib/content-localization/models/lipsync \
+    mkdir -p /opt/nim \
+             /var/lib/content-localization/models/lipsync \
              /var/lib/content-localization/models/asd \
              /var/lib/content-localization/demo-app && \
-    chown -R cdsw:cdsw ${APP_ROOT} /var/lib/content-localization && \
+    chown -R cdsw:cdsw ${APP_ROOT} /var/lib/content-localization /opt/nim && \
     usermod -aG docker cdsw || true
 
 # Demo production artifacts (Next.js + custom Node server)

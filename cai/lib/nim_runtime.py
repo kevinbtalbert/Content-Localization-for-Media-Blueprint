@@ -195,8 +195,9 @@ def configure_lipsync_env() -> dict[str, Any]:
         "NIM_GRPC_API_PORT": grpc_port,
         "NIM_TAGS_SELECTOR": tags,
         "NIM_MAX_CONCURRENCY_PER_GPU": os.environ.get("NIM_MAX_CONCURRENCY_PER_GPU", "1"),
+        # Writable project path (monitor with du); NIM process uses /opt/nim/.cache via symlink.
         "NIM_CACHE_PATH": cache_dir,
-        "NIM_CACHE_DIR": cache_dir,
+        "NIM_CACHE_DIR": "/opt/nim/.cache",
         "LIPSYNC_DEBUG_MODE": os.environ.get("LIPSYNC_DEBUG_MODE", "0"),
     }
     os.environ.update(env)
@@ -227,7 +228,7 @@ def configure_asd_env() -> dict[str, Any]:
         "MAXINE_MAX_CONCURRENCY_PER_GPU": "1",
         "NIM_MAX_CONCURRENCY_PER_GPU": os.environ.get("NIM_MAX_CONCURRENCY_PER_GPU", "1"),
         "NIM_CACHE_PATH": cache_dir,
-        "NIM_CACHE_DIR": cache_dir,
+        "NIM_CACHE_DIR": "/opt/nim/.cache",
     }
     os.environ.update(env)
     write_nim_shell_env("asd", ASD_NIM_ENV_KEYS)
@@ -274,7 +275,8 @@ def write_nim_image_manifest() -> Path:
         "bundle_root": str(NIM_BUNDLE_ROOT),
         "note": (
             "LipSync and ASD NIM servers are copied into the ContentLocalization runtime "
-            "image at build time. CAI GPU applications use the same registered runtime."
+            "image at build time. Model weights are baked under "
+            "/opt/nvidia-nim/baked-model-cache/ (see scripts/docker/prefetch-nim-model-caches.sh)."
         ),
         "lipsync": {
             "source_image": os.environ.get("LIPSYNC_IMAGE", LIPSYNC_DEFAULTS["source_image"]),

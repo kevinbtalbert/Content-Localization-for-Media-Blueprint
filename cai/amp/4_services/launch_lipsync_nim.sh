@@ -35,7 +35,7 @@ print(
     flush=True,
 )
 print(
-    "First start may take 15–120+ minutes while NIM downloads model weights from NGC.",
+    "Model weights come from the runtime image (baked at build) unless cache is empty.",
     flush=True,
 )
 print(
@@ -60,13 +60,13 @@ nohup python3 "${project}/cai/amp/4_services/run_nim_sidecar.py" \
   --name lipsync-nim \
   --grpc-port "${NIM_GRPC_API_PORT}" \
   --http-port "${NIM_HTTP_API_PORT}" \
-  --cache-dir "${NIM_CACHE_DIR}" \
+  --cache-dir "${NIM_CACHE_PATH:-${NIM_CACHE_DIR}}" \
   --app-port "${app_port}" \
   >>"${sidecar_log}" 2>&1 &
 echo "Started NIM sidecar (app port ${app_port}, logs: ${sidecar_log})"
 
 (
-  cache="${NIM_CACHE_DIR}"
+  cache="${NIM_CACHE_PATH:-${NIM_CACHE_DIR}}"
   while true; do
     if [[ -d "${cache}" ]]; then
       size="$(du -sh "${cache}" 2>/dev/null | awk '{print $1}')"

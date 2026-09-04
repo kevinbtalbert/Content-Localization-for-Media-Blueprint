@@ -13,18 +13,49 @@ if [[ ! -f "${entrypoint_file}" ]]; then
 fi
 
 cache_root="${CDSW_PROJECT_DIR:-/home/cdsw}/volumes/models/${nim_type}"
-export NIM_CACHE_PATH="${NIM_CACHE_PATH:-${NIM_CACHE_DIR:-${cache_root}}}"
-export NIM_CACHE_DIR="${NIM_CACHE_DIR:-${NIM_CACHE_PATH}}"
+baked_root="/opt/nvidia-nim/baked-model-cache/${nim_type}"
+export NIM_CACHE_PATH="${NIM_CACHE_PATH:-${cache_root}}"
 mkdir -p "${NIM_CACHE_PATH}"
 
-# Bundled NIM defaults to /opt/nim/.cache (see NVIDIA LipSync docs). When not using
-# Docker volume mounts, point the in-bundle path at the writable project cache.
+# Seed writable project cache from image-baked weights (populated at docker build time).
+if [[ -d "${baked_root}" ]] && [[ -n "$(ls -A "${baked_root}" 2>/dev/null)" ]]; then
+  if [[ -z "$(ls -A "${NIM_CACHE_PATH}" 2>/dev/null)" ]]; then
+    echo "Seeding ${nim_type} runtime cache from baked model weights at ${baked_root} ..."
+    cp -a "${baked_root}/." "${NIM_CACHE_PATH}/"
+    echo "  seeded $(du -sh "${NIM_CACHE_PATH}" | awk '{print $1}')"
+  else
+    echo "Runtime cache already populated: ${NIM_CACHE_PATH} ($(du -sh "${NIM_CACHE_PATH}" | awk '{print $1}'))"
+  fi
+else
+  echo "WARNING: no baked model cache at ${baked_root}; NIM must download weights at runtime (needs NGC_API_KEY)." >&2
+fi
+
+# NVIDIA NIMs read/write model weights at /opt/nim/.cache (see deploy_lipsync.sh).
+# docker run uses -v cache:/opt/nim/.cache; bundled mode must recreate that layout.
+if [[ ! -d /opt/nim ]]; then
+  if ! mkdir -p /opt/nim 2>/dev/null; then
+    echo "ERROR: cannot create /opt/nim (need writable /opt or use docker run launcher)." >&2
+    exit 1
+  fi
+fi
+if [[ -e /opt/nim/.cache && ! -L /opt/nim/.cache ]]; then
+  rm -rf /opt/nim/.cache
+fi
+if ! ln -sfn "${NIM_CACHE_PATH}" /opt/nim/.cache; then
+  echo "ERROR: failed to link /opt/nim/.cache -> ${NIM_CACHE_PATH}" >&2
+  exit 1
+fi
+export NIM_CACHE_DIR="/opt/nim/.cache"
+
+# Also link inside the bundle tree for entrypoints that resolve relative to opt/nim.
 bundle_cache="${bundle_root}/opt/nim/.cache"
 if [[ -d "${bundle_root}/opt/nim" ]]; then
   if [[ -e "${bundle_cache}" && ! -L "${bundle_cache}" ]]; then
     rm -rf "${bundle_cache}"
   fi
-  ln -sfn "${NIM_CACHE_PATH}" "${bundle_cache}" 2>/dev/null || true
+  if ! ln -sfn "${NIM_CACHE_PATH}" "${bundle_cache}"; then
+    echo "WARNING: failed to link ${bundle_cache} -> ${NIM_CACHE_PATH}" >&2
+  fi
 fi
 
 lib_paths=(

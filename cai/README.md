@@ -88,16 +88,20 @@ echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
 docker pull --platform linux/amd64 nvcr.io/nim/nvidia/lipsync:1.3.0
 docker pull --platform linux/amd64 nvcr.io/nim/nvidia/active-speaker-detection:1.1.0
 
-# 4. Build the unified runtime (linux/amd64 for CAI)
-docker build --platform linux/amd64 \
-  -t docker.io/<your-dockerhub-user>/contentlocalization:1.2.0 \
-  .
+# 4. Build the unified runtime (linux/amd64 for CAI) — prefetches models + auto-tags by GPU arch
+export NGC_API_KEY='<your-ngc-api-key>'
+echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+export CONTENT_LOCALIZATION_REGISTRY=docker.io/<your-dockerhub-user>/content-localization
+./scripts/docker/build-content-localization-image.sh
+# Tags e.g. content-localization:1.2.0-turing, content-localization:latest,
+#         docker.io/<user>/content-localization:1.2.0-turing, ...:latest
 
 # 5. Clear the key from your shell
 unset NGC_API_KEY
 
 # 6. Push to your registry (image contains no secrets)
-docker push docker.io/<your-dockerhub-user>/contentlocalization:1.2.0
+docker push docker.io/<your-dockerhub-user>/content-localization:1.2.0-turing
+docker push docker.io/<your-dockerhub-user>/content-localization:latest
 ```
 
 Replace `<your-dockerhub-user>` with your registry namespace. Use a private registry instead of Docker Hub if your org requires it.
@@ -116,13 +120,40 @@ Expected output: `OK`. If either `entrypoint` file is missing, the NIM copy stag
 
 ### What gets baked in vs downloaded later
 
-| At **image build** (your workstation) | At **CAI runtime** (GPU applications) |
+| At **image build** (GPU workstation) | At **CAI runtime** (GPU applications) |
 |----------------------------------------|----------------------------------------|
-| NIM server binaries under `/opt/nvidia-nim/` | NIM **model weights** downloaded on first start |
-| Python, Node, grpcurl, blueprint code, demo UI | Uses `NGC_API_KEY` from **project environment** |
-| `ML_RUNTIME_EDITION=ContentLocalization` labels | Prerequisite check verifies bundle paths exist |
+| NIM server binaries under `/opt/nvidia-nim/` | Bundled NIM **exec** (no `docker run` in CAI) |
+| **Model weights** under `/opt/nvidia-nim/baked-model-cache/` via prefetch | Seeds `/home/cdsw/volumes/models/{lipsync,asd}` from baked cache on first start |
+| Python, Node, grpcurl, blueprint code, demo UI | May recompile TensorRT engines if pod GPU **architecture** differs from build GPU |
 
-First LipSync/ASD application start on CAI may take **15–30 minutes** while models download.
+**Build inputs (see [build/nim-model-cache/README.md](../build/nim-model-cache/README.md) for full detail):**
+
+| You provide | Example | Required? |
+|-------------|---------|-----------|
+| `NGC_API_KEY` | `nvapi-…` | Yes (build host only; not in image) |
+| GPU on build laptop/workstation | Tesla **T4** | Yes — must be [Maxine-supported](https://docs.nvidia.com/nim/maxine/lipsync/1.3.0/support-matrix.html) (T4, L4, A10, L40, …). **Not** A100/H100. |
+| `LIPSYNC_NIM_TAGS_SELECTOR` | `language=de` | No (default) |
+| `NIM_PREFETCH_GPU` | `all` or `device=0` | No — pin `device=N` on multi-GPU hosts |
+
+**Approximate image size:** ~35–45 GB with baked caches (~25 GB without). Prefetch prints exact LipSync/ASD cache sizes.
+
+**GPU architecture:** Build on the **same class** as CAI (e.g. T4 → tag `content-localization:1.2.0-turing`). One image runs on other supported GPUs, but a different arch may spend 5–15 minutes recompiling engines on first start.
+
+**Build with models (required for CAI):**
+
+```bash
+export NGC_API_KEY=...
+echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+./scripts/docker/build-content-localization-image.sh
+```
+
+Prefetch alone (before a manual `docker build`):
+
+```bash
+./scripts/docker/prefetch-nim-model-caches.sh
+```
+
+Plain `docker build` without prefetch **fails** — `build/nim-model-cache/` must contain LipSync and ASD weights.
 
 ## Custom runtime registration (admin)
 
