@@ -21,6 +21,9 @@ See [NIMLICENSES.md](../../NIMLICENSES.md). Do not distribute baked-weight image
 | GPU on build host | **Yes** | Tesla T4 | Must be a [supported Maxine GPU](#supported-gpus). **Not** A100/H100. |
 | `LIPSYNC_NIM_TAGS_SELECTOR` | No | `language=de` | Default in this blueprint. One language per baked cache. |
 | `NIM_PREFETCH_GPU` | No | `all` or `device=0` | Which GPU Docker exposes during prefetch. See below. |
+| `NIM_PREFETCH_TIMEOUT_S` | No | `7200` | Max seconds to wait for each NIM `/v1/health/ready` |
+| `NIM_PREFETCH_MIN_BYTES_LIPSYNC` | No | 3 GiB | Refuse to stage LipSync cache smaller than this after health ready |
+| `NIM_PREFETCH_MIN_BYTES_ASD` | No | 2 GiB | Refuse to stage ASD cache smaller than this after health ready |
 | `CONTENT_LOCALIZATION_IMAGE` | No | `content-localization:1.4.0-turing` | Override auto-tagging (disables arch suffix) |
 | `CONTENT_LOCALIZATION_REGISTRY` | No | `<registry>/<namespace>/content-localization` | Optional second tag for your private registry |
 
@@ -101,3 +104,5 @@ build/nim-model-cache/
 ```
 
 Plain `docker build` **fails** if these directories are empty.
+
+Prefetch **succeeds only when** each NIM returns `/v1/health/ready` and the staged cache meets the minimum size (defaults: 3 GiB LipSync, 2 GiB ASD). A flat `du` without health ready does **not** complete prefetch — this prevents partial bakes like ~650 M / ~422 M caches.

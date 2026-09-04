@@ -35,6 +35,9 @@ OUT_ROOT="${root}/build/nim-model-cache"
 WORK="${root}/build/nim-prefetch-work"
 TIMEOUT_S="${NIM_PREFETCH_TIMEOUT_S:-7200}"
 MIN_BYTES=1048576
+# Minimum staged cache after /v1/health/ready (override if your language profile is smaller).
+LIPSYNC_MIN_CACHE_BYTES="${NIM_PREFETCH_MIN_BYTES_LIPSYNC:-$((3 * 1024 * 1024 * 1024))}"
+ASD_MIN_CACHE_BYTES="${NIM_PREFETCH_MIN_BYTES_ASD:-$((2 * 1024 * 1024 * 1024))}"
 
 print_prefetch_plan() {
   echo "=== NIM model prefetch plan ==="
@@ -44,6 +47,7 @@ print_prefetch_plan() {
   echo "  Docker GPU flag:   --gpus ${NIM_PREFETCH_GPU}"
   echo "  Output:            ${OUT_ROOT}/{lipsync,asd}"
   echo "  Expected cache:    ~6–10 GB LipSync + ~4–8 GB ASD (see README for totals)"
+  echo "  Success criteria:  /v1/health/ready + minimum cache size (no early exit on flat du)"
   echo
 
   nim_validate_prefetch_gpu "${NIM_PREFETCH_GPU}" || exit 1
@@ -65,10 +69,12 @@ prefetch_one() {
   local work_dir="$4"
   local host_http="$5"
   local container="$6"
-  shift 6
+  local min_ready_bytes="$7"
+  shift 7
   local -a extra_env=("$@")
 
   echo "=== Prefetch ${name} (${image}) ==="
+  echo "  Requires /v1/health/ready and cache >= $(numfmt --to=iec-i --suffix=B "${min_ready_bytes}" 2>/dev/null || echo "${min_ready_bytes} bytes")"
   rm -rf "${work_dir:?}/"*
   mkdir -p "${work_dir}"
   chmod 777 "${work_dir}"
@@ -97,7 +103,7 @@ prefetch_one() {
 
   local deadline=$((SECONDS + TIMEOUT_S))
   local last_bytes=0
-  local stable=0
+  local ready=0
   while (( SECONDS < deadline )); do
     if ! docker inspect -f '{{.State.Running}}' "${container}" 2>/dev/null | grep -q true; then
       echo "ERROR: ${container} exited early. Logs:" >&2
@@ -109,24 +115,23 @@ prefetch_one() {
     local bytes
     bytes="$(du -sb "${work_dir}" 2>/dev/null | awk '{print $1}' || echo 0)"
     if curl -sf "http://127.0.0.1:${host_http}/v1/health/ready" >/dev/null 2>&1; then
+      ready=1
       echo "${name}: health ready ($(du -sh "${work_dir}" | awk '{print $1}'))"
       break
     fi
-    if (( bytes >= MIN_BYTES )); then
-      if (( bytes == last_bytes )); then
-        stable=$((stable + 1))
-        if (( stable >= 6 )); then
-          echo "${name}: cache stable at $(du -sh "${work_dir}" | awk '{print $1}')"
-          break
-        fi
-      else
-        stable=0
-        echo "${name}: cache $(du -sh "${work_dir}" | awk '{print $1}')"
-      fi
+    if (( bytes != last_bytes && bytes >= MIN_BYTES )); then
+      echo "${name}: cache growing $(du -sh "${work_dir}" | awk '{print $1}') (waiting for /v1/health/ready) ..."
     fi
     last_bytes="${bytes}"
     sleep 10
   done
+
+  if (( ! ready )); then
+    echo "ERROR: ${name} prefetch timed out after ${TIMEOUT_S}s — /v1/health/ready never succeeded." >&2
+    echo "  Cache size: $(du -sh "${work_dir}" 2>/dev/null | awk '{print $1}' || echo 0)" >&2
+    echo "  Partial caches are not baked into the image. Check NGC key, GPU, and container logs." >&2
+    docker logs "${container}" 2>&1 | tail -60 >&2 || true
+  fi
 
   docker stop "${container}" >/dev/null 2>&1 || true
   docker wait "${container}" >/dev/null 2>&1 || true
@@ -134,6 +139,14 @@ prefetch_one() {
 
   local final_bytes
   final_bytes="$(du -sb "${work_dir}" 2>/dev/null | awk '{print $1}' || echo 0)"
+  if (( ! ready )); then
+    exit 1
+  fi
+  if (( final_bytes < min_ready_bytes )); then
+    echo "ERROR: ${name} reported health ready but cache is too small (${final_bytes} bytes < ${min_ready_bytes})." >&2
+    echo "  Likely incomplete download — refusing to stage a partial bake." >&2
+    exit 1
+  fi
   if (( final_bytes < MIN_BYTES )); then
     echo "ERROR: ${name} prefetch failed — ${work_dir} is empty (${final_bytes} bytes)." >&2
     exit 1
@@ -145,10 +158,10 @@ prefetch_one() {
 }
 
 prefetch_one lipsync "${LIPSYNC_IMAGE}" "${OUT_ROOT}/lipsync" "${WORK}/lipsync" 18080 \
-  prefetch-lipsync -e "NIM_TAGS_SELECTOR=${LIPSYNC_TAGS}"
+  prefetch-lipsync "${LIPSYNC_MIN_CACHE_BYTES}" -e "NIM_TAGS_SELECTOR=${LIPSYNC_TAGS}"
 
 prefetch_one asd "${ASD_IMAGE}" "${OUT_ROOT}/asd" "${WORK}/asd" 18082 \
-  prefetch-asd -e MAXINE_MAX_CONCURRENCY_PER_GPU=1
+  prefetch-asd "${ASD_MIN_CACHE_BYTES}" -e MAXINE_MAX_CONCURRENCY_PER_GPU=1
 
 nim_write_build_metadata "${OUT_ROOT}" "${NIM_PREFETCH_GPU}" "${LIPSYNC_TAGS}"
 

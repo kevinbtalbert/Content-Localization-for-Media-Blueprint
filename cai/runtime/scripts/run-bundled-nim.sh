@@ -17,17 +17,64 @@ baked_root="/opt/nvidia-nim/baked-model-cache/${nim_type}"
 export NIM_CACHE_PATH="${NIM_CACHE_PATH:-${cache_root}}"
 mkdir -p "${NIM_CACHE_PATH}"
 
+# CAI may set NVIDIA_VISIBLE_DEVICES=void while nvidia-smi still works; CUDA apps need a device index.
+if [[ "${NVIDIA_VISIBLE_DEVICES:-}" == "void" || "${NVIDIA_VISIBLE_DEVICES:-}" == "none" ]]; then
+  export NVIDIA_VISIBLE_DEVICES=0
+  echo "Adjusted NVIDIA_VISIBLE_DEVICES=0 (was void/none — required for bundled NIM CUDA init)."
+fi
+
+cache_min_bytes() {
+  case "${nim_type}" in
+    lipsync) echo "${NIM_RUNTIME_MIN_BYTES_LIPSYNC:-$((3 * 1024 * 1024 * 1024))}" ;;
+    asd) echo "${NIM_RUNTIME_MIN_BYTES_ASD:-$((2 * 1024 * 1024 * 1024))}" ;;
+    *) echo "${NIM_RUNTIME_MIN_BYTES:-$((2 * 1024 * 1024 * 1024))}" ;;
+  esac
+}
+
+dir_bytes() {
+  local path="$1"
+  if [[ -d "${path}" ]]; then
+    du -sb "${path}" 2>/dev/null | awk '{print $1}' || echo 0
+  else
+    echo 0
+  fi
+}
+
+min_bytes="$(cache_min_bytes)"
+cache_bytes="$(dir_bytes "${NIM_CACHE_PATH}")"
+baked_bytes="$(dir_bytes "${baked_root}")"
+
 # Seed writable project cache from image-baked weights (populated at docker build time).
-if [[ -d "${baked_root}" ]] && [[ -n "$(ls -A "${baked_root}" 2>/dev/null)" ]]; then
-  if [[ -z "$(ls -A "${NIM_CACHE_PATH}" 2>/dev/null)" ]]; then
-    echo "Seeding ${nim_type} runtime cache from baked model weights at ${baked_root} ..."
-    cp -a "${baked_root}/." "${NIM_CACHE_PATH}/"
-    echo "  seeded $(du -sh "${NIM_CACHE_PATH}" | awk '{print $1}')"
+if [[ "${SKIP_BAKED_CACHE:-}" == "1" ]]; then
+  echo "SKIP_BAKED_CACHE=1 — not seeding from ${baked_root}."
+elif [[ -d "${baked_root}" ]] && [[ -n "$(ls -A "${baked_root}" 2>/dev/null)" ]]; then
+  if (( cache_bytes < min_bytes )); then
+    if (( baked_bytes >= min_bytes )); then
+      echo "Seeding ${nim_type} runtime cache from baked model weights at ${baked_root} ..."
+      rm -rf "${NIM_CACHE_PATH:?}/"*
+      cp -a "${baked_root}/." "${NIM_CACHE_PATH}/"
+      cache_bytes="$(dir_bytes "${NIM_CACHE_PATH}")"
+      echo "  seeded $(du -sh "${NIM_CACHE_PATH}" | awk '{print $1}')"
+    elif (( baked_bytes >= 1048576 )); then
+      echo "WARNING: baked cache at ${baked_root} is only $(du -sh "${baked_root}" | awk '{print $1}') — below expected minimum." >&2
+      echo "         Rebuild the runtime image with a full prefetch, or allow runtime download with NGC_API_KEY." >&2
+    fi
   else
     echo "Runtime cache already populated: ${NIM_CACHE_PATH} ($(du -sh "${NIM_CACHE_PATH}" | awk '{print $1}'))"
   fi
 else
   echo "WARNING: no baked model cache at ${baked_root}; NIM must download weights at runtime (needs NGC_API_KEY)." >&2
+fi
+
+cache_bytes="$(dir_bytes "${NIM_CACHE_PATH}")"
+if (( cache_bytes < min_bytes )); then
+  if [[ -z "${NGC_API_KEY:-}" ]]; then
+    echo "ERROR: model cache $(du -sh "${NIM_CACHE_PATH}" 2>/dev/null | awk '{print $1}') is below minimum for ${nim_type}." >&2
+    echo "  Set NGC_API_KEY in Project Settings → Environment and restart the session/application." >&2
+    echo "  Or rebuild the image with a complete prefetch (see scripts/docker/prefetch-nim-model-caches.sh)." >&2
+    exit 1
+  fi
+  echo "Model cache below minimum ($(du -sh "${NIM_CACHE_PATH}" | awk '{print $1}')); NIM will download from NGC on startup (may take 15–60+ min)."
 fi
 
 # NVIDIA NIMs read/write model weights at /opt/nim/.cache (see deploy_lipsync.sh).
