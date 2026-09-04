@@ -6,7 +6,10 @@ description: |
 author: Cloudera
 specification_version: 1.0
 prototype_version: 1.5
-date: "2026-08-31"
+date: "2026-09-04"
+# Additional /dev/shm for sessions (GB). AMP default is 0.0625 (64 MB); LipSync/ASD Triton
+# needs ~4–8 GB (Docker Compose uses --shm-size=8g). See ml-amp.pdf → shared_memory_limit.
+shared_memory_limit: 8
 
 runtimes:
   - editor: JupyterLab
