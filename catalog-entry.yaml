@@ -7,7 +7,7 @@ entries:
       Cloudera AI Workbench with bundled LipSync/ASD NIM GPU applications, S2S dubbing,
       and a Next.js Launchpad UI.
     long_description: |
-      Requires the custom runtime **ContentLocalization** v1.2
+      Requires the custom runtime **ContentLocalization** v1.4
       (build the repository root Dockerfile with NGC login for nvcr.io, then register).
       LipSync and ASD NIM servers are bundled in this single image — no extra runtimes.
     image_path: "https://github.com/kevinbtalbert/Content-Localization-for-Media-Blueprint/blob/main/assets/AMP_thumbnail.png?raw=true"

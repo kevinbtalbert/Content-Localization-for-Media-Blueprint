@@ -49,7 +49,7 @@ print_prefetch_plan() {
   nim_validate_prefetch_gpu "${NIM_PREFETCH_GPU}" || exit 1
 
   if [[ "${NIM_PREFETCH_GPU_ARCH:-unknown}" != "unknown" ]]; then
-    echo "Image will be tagged: content-localization:1.2.0-${NIM_PREFETCH_GPU_ARCH} (via build script)"
+    echo "Image will be tagged: content-localization:1.4.0-${NIM_PREFETCH_GPU_ARCH} (via build script)"
     echo
   fi
 }
@@ -70,6 +70,8 @@ prefetch_one() {
 
   echo "=== Prefetch ${name} (${image}) ==="
   rm -rf "${work_dir:?}/"*
+  mkdir -p "${work_dir}"
+  chmod 777 "${work_dir}"
   docker rm -f "${container}" 2>/dev/null || true
 
   local -a run_cmd=(
@@ -156,7 +158,7 @@ total_gb="$(du -sh "${OUT_ROOT}" | awk '{print $1}')"
 arch="$(nim_read_gpu_arch "${OUT_ROOT}" "${NIM_PREFETCH_GPU}")"
 
 echo
-echo "=== Prefetch sizes (record for your registry README) ==="
+echo "=== Prefetch sizes ==="
 echo "  LipSync: ${lipsync_gb}"
 echo "  ASD:     ${asd_gb}"
 echo "  Total:   ${total_gb}  (+ ~25 GB NIM binaries/runtime → expect ~35–45 GB final image)"
@@ -164,4 +166,4 @@ echo "  GPU arch: ${arch}"
 echo
 echo "Prefetch complete. Build the runtime image with:"
 echo "  ./scripts/docker/build-content-localization-image.sh"
-echo "  → tags: content-localization:1.2.0-${arch}, content-localization:latest"
+echo "  → tag: content-localization:1.4.0-${arch}"

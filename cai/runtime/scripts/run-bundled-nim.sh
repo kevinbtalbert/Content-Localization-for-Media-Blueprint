@@ -50,11 +50,16 @@ export NIM_CACHE_DIR="/opt/nim/.cache"
 # Also link inside the bundle tree for entrypoints that resolve relative to opt/nim.
 bundle_cache="${bundle_root}/opt/nim/.cache"
 if [[ -d "${bundle_root}/opt/nim" ]]; then
-  if [[ -e "${bundle_cache}" && ! -L "${bundle_cache}" ]]; then
-    rm -rf "${bundle_cache}"
-  fi
-  if ! ln -sfn "${NIM_CACHE_PATH}" "${bundle_cache}"; then
-    echo "WARNING: failed to link ${bundle_cache} -> ${NIM_CACHE_PATH}" >&2
+  if [[ ! -w "${bundle_root}/opt/nim" ]]; then
+    echo "WARNING: ${bundle_root}/opt/nim is not writable — skipping bundle cache symlink." >&2
+    echo "         Rebuild the ContentLocalization image (see Dockerfile chown on /opt/nvidia-nim)." >&2
+  else
+    if [[ -e "${bundle_cache}" && ! -L "${bundle_cache}" ]]; then
+      rm -rf "${bundle_cache}"
+    fi
+    if ! ln -sfn "${NIM_CACHE_PATH}" "${bundle_cache}"; then
+      echo "WARNING: failed to link ${bundle_cache} -> ${NIM_CACHE_PATH}" >&2
+    fi
   fi
 fi
 

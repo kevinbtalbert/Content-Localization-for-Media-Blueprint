@@ -7,10 +7,9 @@
 # Usage:
 #   docker compose --env-file configs/elevenlabs.env --env-file .env up --build
 #
-# Image can be pre-built and pushed to Docker Hub:
-#   docker build -t <user>/content-localization:latest .
-#   docker push <user>/content-localization:latest
-#   IMAGE=<user>/content-localization:latest docker compose up
+# Optional pre-built image:
+#   docker build -t content-localization:1.4.0-turing .
+#   IMAGE=content-localization:1.4.0-turing docker compose up
 
 services:
   content-localization:

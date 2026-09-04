@@ -1,8 +1,8 @@
 # Content Localization
 
-> **Cloudera AI Workbench:** For AMP deployment with bundled NIM GPU applications, see [cai/README.md](cai/README.md) — including **how to build and push** the `ContentLocalization` runtime image (NGC login, `linux/amd64`, v1.2).
+> **Cloudera AI Workbench:** For AMP deployment with bundled NIM GPU applications, see [cai/README.md](cai/README.md) — including how to build the `ContentLocalization` runtime image with baked NIM weights (NGC entitlement required).
 >
-> **Docker Hub / local stack:** For docker-compose with DinD NIM sidecars, see [docker-compose.yml](docker-compose.yml). CAI builds use the same root `Dockerfile` but require NGC login at build time; see [cai/README.md](cai/README.md#building-the-contentlocalization-runtime-image).
+> **Local stack:** For docker-compose with DinD NIM sidecars, see [docker-compose.yml](docker-compose.yml).
 
 The Content Localization Blueprint is a comprehensive solution for translating and dubbing audio and video content using AI services. It is a microservices architecture that orchestrates three main AI services:
 

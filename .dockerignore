@@ -7,7 +7,14 @@
 *.pyc
 *.pyo
 *.pyd
-build
+build/*
+!build/nim-model-cache/
+build/nim-model-cache/*
+!build/nim-model-cache/lipsync/
+!build/nim-model-cache/asd/
+!build/nim-model-cache/lipsync/**
+!build/nim-model-cache/asd/**
+build/nim-prefetch-work
 dataset
 dist
 docs*

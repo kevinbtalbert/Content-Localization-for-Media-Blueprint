@@ -166,10 +166,10 @@ nim_read_gpu_arch() {
   echo "unknown"
 }
 
-# Compose docker tags: repo:version-arch, repo:latest, optional registry mirror.
+# Compose docker tags: repo:version-arch (+ optional registry mirror).
 nim_compose_image_tags() {
   local repo="${1:-content-localization}"
-  local version="${2:-1.2.0}"
+  local version="${2:-1.4.0}"
   local arch="${3:-unknown}"
   local registry="${4:-}"
 
@@ -179,10 +179,9 @@ nim_compose_image_tags() {
   fi
 
   NIM_IMAGE_TAG_PRIMARY="${repo}:${version}${arch_suffix}"
-  NIM_IMAGE_TAG_LATEST="${repo}:latest"
-  NIM_IMAGE_TAGS=("${NIM_IMAGE_TAG_PRIMARY}" "${NIM_IMAGE_TAG_LATEST}")
+  NIM_IMAGE_TAGS=("${NIM_IMAGE_TAG_PRIMARY}")
 
   if [[ -n "${registry}" ]]; then
-    NIM_IMAGE_TAGS+=("${registry}:${version}${arch_suffix}" "${registry}:latest")
+    NIM_IMAGE_TAGS+=("${registry}:${version}${arch_suffix}")
   fi
 }

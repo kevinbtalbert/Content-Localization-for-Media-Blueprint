@@ -15,9 +15,9 @@ amp_runtime_match:
   editor: JupyterLab
   kernel: Python 3.13
   edition: ContentLocalization
-  version: "1.2"
+  version: "1.4"
 
-docker_image_example: "docker.io/<your-user>/contentlocalization:1.2.0"
+docker_image_example: "docker.io/<your-user>/contentlocalization:1.4.0-turing"
 
 catalog_classification:
   - Developer Example

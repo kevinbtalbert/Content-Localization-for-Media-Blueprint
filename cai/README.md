@@ -35,7 +35,7 @@ AMP Install
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `NGC_API_KEY` | Yes (at AMP install) | NIM model access inside NIM application pods |
+| `NGC_API_KEY` | Yes (at AMP install) | **NVIDIA NIM entitlement** — required for LipSync/ASD even when weights are baked into the runtime image (see [NVIDIA model licensing](#nvidia-model-licensing-baked-weights)) |
 | `S2S_SERVICE` | Yes | `EL_DUBBING` or `CAMB_DUBBING` |
 | `ELEVENLABS_API_KEY` | If EL | ElevenLabs dubbing API |
 | `CAMB_API_KEY` | If Camb | CambAI dubbing API |
@@ -44,6 +44,20 @@ AMP Install
 
 - `nvcr.io/nim/nvidia/active-speaker-detection:1.1.0`
 - `nvcr.io/nim/nvidia/lipsync:1.3.0` (requires [NVIDIA AI for Media Private Access](https://developer.nvidia.com/ai-for-media/private-access-program))
+
+## NVIDIA model licensing (baked weights)
+
+The ContentLocalization runtime image **embeds LipSync and ASD model weights** at build time. NVIDIA NIM models remain **separately licensed** — baking does not grant or transfer rights to downstream users.
+
+| Party | Requirement |
+|-------|-------------|
+| **Image builder** | Valid NGC API key with entitlement to pull LipSync/ASD NIM images and model artifacts from `nvcr.io` |
+| **End customer / deployer** | **Must independently hold** NVIDIA NIM licensing and NGC entitlement for LipSync and ASD before deploying or using the runtime image |
+| **Distribution** | Do not ship the built image to organizations that lack applicable NVIDIA agreements |
+
+Full terms: [NIMLICENSES.md](../NIMLICENSES.md) and NVIDIA [Software License Agreement](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/) / [AI product terms](https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+Customers configure their own **`NGC_API_KEY`** at CAI AMP install. That key confirms entitled access; it is not baked into the image.
 
 ## Building the ContentLocalization runtime image
 
@@ -62,49 +76,39 @@ The root [`Dockerfile`](../Dockerfile) produces one image for CAI: blueprint too
 
 ### Credential safety (required)
 
-The NGC API key must **never** appear in git, Docker Hub, or image layers.
+The NGC API key must **never** appear in git, public container registries, or image layers.
 
 | Do | Don't |
 |----|--------|
 | Export `NGC_API_KEY` in your **terminal session only** | Commit the key to `.env`, scripts, or the Dockerfile |
 | Use `docker login nvcr.io` before `docker build` | Pass `--build-arg NGC_API_KEY=...` (can leak into build history) |
-| `unset NGC_API_KEY` after login | Paste the key into GitHub issues, PRs, or AMP metadata |
-| Set `NGC_API_KEY` again at **CAI AMP install** (project env) for runtime model download | Bake the key into the image with `ENV NGC_API_KEY` |
+| `unset NGC_API_KEY` after login | Paste the key into git, issues, PRs, or AMP metadata |
+| Require each **customer** to supply their own entitled `NGC_API_KEY` at CAI AMP install | Bake the key into the image with `ENV NGC_API_KEY` |
+| Push the runtime image only to **your organization's private registry** | Publish images containing baked NIM weights to public registries |
 
 The Dockerfile pulls NIM source images during build using your **host** `docker login` session — the key is not copied into the final image.
 
 ### Build and push
 
-From the repository root:
+From the repository root on a **GPU build host** with valid NVIDIA entitlement:
 
 ```bash
-# 1. Set key in this shell only (not in any file)
-export NGC_API_KEY='<your-ngc-api-key>'
-
-# 2. Authenticate to NVIDIA Container Registry (host credential store only)
-echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
-
-# 3. Optional: verify NIM images are reachable before the full build
-docker pull --platform linux/amd64 nvcr.io/nim/nvidia/lipsync:1.3.0
-docker pull --platform linux/amd64 nvcr.io/nim/nvidia/active-speaker-detection:1.1.0
-
-# 4. Build the unified runtime (linux/amd64 for CAI) — prefetches models + auto-tags by GPU arch
 export NGC_API_KEY='<your-ngc-api-key>'
 echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
-export CONTENT_LOCALIZATION_REGISTRY=docker.io/<your-dockerhub-user>/content-localization
+
+# Optional: tag for your private registry at build time
+# export CONTENT_LOCALIZATION_REGISTRY=<registry-host>/<namespace>/content-localization
+
 ./scripts/docker/build-content-localization-image.sh
-# Tags e.g. content-localization:1.2.0-turing, content-localization:latest,
-#         docker.io/<user>/content-localization:1.2.0-turing, ...:latest
+# → content-localization:1.4.0-<gpu-arch>  (e.g. :1.4.0-turing)
 
-# 5. Clear the key from your shell
 unset NGC_API_KEY
 
-# 6. Push to your registry (image contains no secrets)
-docker push docker.io/<your-dockerhub-user>/content-localization:1.2.0-turing
-docker push docker.io/<your-dockerhub-user>/content-localization:latest
+# Push to your organization's registry (not documented here — use your internal process)
+docker push <registry>/<namespace>/content-localization:1.4.0-turing
 ```
 
-Replace `<your-dockerhub-user>` with your registry namespace. Use a private registry instead of Docker Hub if your org requires it.
+Only distribute the pushed image to customers who hold their own NVIDIA NIM / NGC entitlement for LipSync and ASD.
 
 ### Verify the NIM bundle (optional)
 
@@ -112,7 +116,7 @@ After the build, confirm bundled NIM trees exist:
 
 ```bash
 docker run --rm --platform linux/amd64 \
-  docker.io/<your-dockerhub-user>/contentlocalization:1.2.0 \
+  <your-runtime-image>:1.4.0-turing \
   bash -lc 'test -f /opt/nvidia-nim/lipsync/entrypoint && test -f /opt/nvidia-nim/asd/entrypoint && echo OK'
 ```
 
@@ -137,7 +141,7 @@ Expected output: `OK`. If either `entrypoint` file is missing, the NIM copy stag
 
 **Approximate image size:** ~35–45 GB with baked caches (~25 GB without). Prefetch prints exact LipSync/ASD cache sizes.
 
-**GPU architecture:** Build on the **same class** as CAI (e.g. T4 → tag `content-localization:1.2.0-turing`). One image runs on other supported GPUs, but a different arch may spend 5–15 minutes recompiling engines on first start.
+**GPU architecture:** Build on the **same class** as CAI (e.g. T4 → tag `content-localization:1.4.0-turing`). One image runs on other supported GPUs, but a different arch may spend 5–15 minutes recompiling engines on first start.
 
 **Build with models (required for CAI):**
 
@@ -159,7 +163,7 @@ Plain `docker build` without prefetch **fails** — `build/nim-model-cache/` mus
 
 Register **one** runtime in **Admin → Runtime Catalog**:
 
-1. Update [`repo-assembly.json`](runtime/repo-assembly.json): set `image_identifier` to your pushed tag (e.g. `docker.io/<user>/contentlocalization:1.2.0`).
+1. Update [`repo-assembly.json`](runtime/repo-assembly.json): set `image_identifier` to your private registry URI (e.g. `<registry>/<namespace>/content-localization:1.4.0-turing`).
 2. Register using [`METADATA.yaml`](runtime/METADATA.yaml) or upload `repo-assembly.json` under **Site Administration → Runtime**.
 3. Confirm catalog fields match the image labels:
 
@@ -168,7 +172,7 @@ Register **one** runtime in **Admin → Runtime Catalog**:
 | Editor | JupyterLab |
 | Kernel | Python 3.13 |
 | Edition | ContentLocalization |
-| Version | 1.2 |
+| Version | 1.4 |
 
 Deprecate older `1.1` registrations after cutover.
 
@@ -185,7 +189,7 @@ The AMP Configure Project screen picks a runtime by matching `.project-metadata.
 | Editor | JupyterLab |
 | Kernel | Python 3.13 |
 | Edition | ContentLocalization |
-| Version | 1.2 |
+| Version | 1.4 |
 
 If Configure Project defaults to **Nvidia GPU / 2026.08**, the custom runtime is not matched. Fix:
 

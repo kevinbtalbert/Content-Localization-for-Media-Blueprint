@@ -42,6 +42,17 @@ assets/sample_video_streamable.mp4
 media/
 videos/
 
+# ---------------------------------------------------------------------------
+# Internal / maintainer-only — not for end-customer distribution
+# ---------------------------------------------------------------------------
+scripts/aws/
+scripts/docker/bake-maxine-nim-cache.sh
+cai/amp/0_spike/prep_nim_model_cache.sh
+build/*.pem
+build/.launch-env
+build/ec2-builder.env
+cai/runtime/repo-assembly.local.json
+
 # client/demos/.gitignore ignores this directory
 *.egg-info
 *.svg

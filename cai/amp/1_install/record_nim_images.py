@@ -29,7 +29,7 @@ def main() -> int:
     validate_ngc_for_nim()
     manifest_path = write_nim_image_manifest()
     if not nim_bundle_ready("lipsync") or not nim_bundle_ready("asd"):
-        print("❌ NIM bundles missing from runtime image — rebuild ContentLocalization v1.2")
+        print("❌ NIM bundles missing from runtime image — rebuild ContentLocalization v1.4")
         return 1
 
     failures = 0

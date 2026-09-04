@@ -2,31 +2,41 @@
 
 Before `docker build`, prefetch LipSync and ASD model weights on a **GPU workstation** with Docker and NGC access. The caches are copied into the ContentLocalization runtime image.
 
+## NVIDIA licensing (required)
+
+Prefetch downloads **NVIDIA NIM model artifacts** from `nvcr.io`. Embedding them in a runtime image does **not** license downstream use.
+
+| Who | Must have |
+|-----|-----------|
+| **Build operator** | NGC API key with entitlement to LipSync + ASD (LipSync requires [AI for Media Private Access](https://developer.nvidia.com/ai-for-media/private-access-program)) |
+| **End customer** | **Their own** NVIDIA NIM / NGC entitlement before deploying the built image |
+
+See [NIMLICENSES.md](../../NIMLICENSES.md). Do not distribute baked-weight images to unlicensed parties.
+
 ## What you must provide
 
 | Input | Required? | Example | Notes |
 |-------|-----------|---------|-------|
-| `NGC_API_KEY` | **Yes** | `nvapi-…` | Same key as `docker login nvcr.io`. **Never** baked into the image. |
+| `NGC_API_KEY` | **Yes** | `nvapi-…` | Build-host only. **Never** baked into the image. Customer supplies their own key at CAI install. |
 | GPU on build host | **Yes** | Tesla T4 | Must be a [supported Maxine GPU](#supported-gpus). **Not** A100/H100. |
 | `LIPSYNC_NIM_TAGS_SELECTOR` | No | `language=de` | Default in this blueprint. One language per baked cache. |
 | `NIM_PREFETCH_GPU` | No | `all` or `device=0` | Which GPU Docker exposes during prefetch. See below. |
-| `CONTENT_LOCALIZATION_IMAGE` | No | `user/content-localization:1.2.0-turing` | Override auto-tagging (disables arch suffix) |
-| `CONTENT_LOCALIZATION_REGISTRY` | No | `docker.io/you/content-localization` | Also tags registry copy (`:1.2.0-turing`, `:latest`) |
+| `CONTENT_LOCALIZATION_IMAGE` | No | `content-localization:1.4.0-turing` | Override auto-tagging (disables arch suffix) |
+| `CONTENT_LOCALIZATION_REGISTRY` | No | `<registry>/<namespace>/content-localization` | Optional second tag for your private registry |
 
 ```bash
 export NGC_API_KEY=...
 echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
-# optional registry mirror tags:
-# export CONTENT_LOCALIZATION_REGISTRY=docker.io/you/content-localization
+# optional: export CONTENT_LOCALIZATION_REGISTRY=<registry>/<namespace>/content-localization
 ./scripts/docker/build-content-localization-image.sh
-# → content-localization:1.2.0-turing, content-localization:latest (+ registry tags)
+# → content-localization:1.4.0-turing (+ registry tag when set)
 ```
 
 Or prefetch only:
 
 ```bash
 ./scripts/docker/prefetch-nim-model-caches.sh
-docker build --platform linux/amd64 -t content-localization:1.2.0 .
+docker build --platform linux/amd64 -t content-localization:1.4.0-turing .
 ```
 
 ## Supported GPUs
@@ -35,10 +45,10 @@ LipSync and ASD require **Tensor cores** plus **NVENC and NVDEC** (video encode/
 
 | Architecture | Example SKUs | Build tag suggestion |
 |--------------|--------------|----------------------|
-| **Turing** | T4, RTX 20xx | `:1.2.0-turing` |
-| **Ampere** | A2, A10, A16, A40, L4 | `:1.2.0-ampere` |
-| **Ada** | L40, L40S, RTX 4090 | `:1.2.0-ada` |
-| **Blackwell** | B40, RTX 5080/5090 | `:1.2.0-blackwell` |
+| **Turing** | T4, RTX 20xx | `:1.4.0-turing` |
+| **Ampere** | A2, A10, A16, A40, L4 | `:1.4.0-ampere` |
+| **Ada** | L40, L40S, RTX 4090 | `:1.4.0-ada` |
+| **Blackwell** | B40, RTX 5080/5090 | `:1.4.0-blackwell` |
 
 **Not supported:** A100, H100, B100 (no NVENC/NVDEC on these datacenter GPUs).
 
@@ -54,7 +64,7 @@ These are planning numbers from NVIDIA Helm guidance (10 Gi PVC per NIM) and t
 | ASD cache | **~4–8 GB** | Weights + engines |
 | NIM server binaries (in image) | **~10–15 GB** | Copied from `nvcr.io/nim/...` at build time |
 | Cloudera runtime + app stack | **~8–12 GB** | Python, CUDA base, Node, blueprint code |
-| **Total image (with baked caches)** | **~35–45 GB** | Your prior 25 GB build had NIM binaries but **no** baked model cache |
+| **Total image (with baked caches)** | **~35–45 GB** | NIM binaries without baked cache are smaller |
 
 Disk during build: allow **~60 GB free** (prefetch work dirs + Docker layers).
 

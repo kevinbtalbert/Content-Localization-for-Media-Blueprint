@@ -28,4 +28,14 @@ This project uses the following NVIDIA NIM (NVIDIA Inference Microservices) cont
 
 ---
 
-**Note**: These NIMs are not distributed as part of this open-source project. They are pulled from NVIDIA NGC at deployment time and require an NGC API key (`NGC_API_KEY`). Users must accept the applicable license terms when accessing these containers from NGC.
+**Note**: These NIMs are not distributed as part of this open-source project. They are subject to NVIDIA license terms on NGC.
+
+### Baked model weights in the ContentLocalization runtime image
+
+The CAI build path **embeds LipSync and ASD model artifacts** inside the runtime image (see `build/nim-model-cache/` and [cai/README.md](cai/README.md)). That means:
+
+1. **Who builds the image** must hold a valid **NGC API key** with entitlement to pull the LipSync and ASD NIM images and model weights from `nvcr.io` (including [NVIDIA AI for Media Private Access](https://developer.nvidia.com/ai-for-media/private-access-program) for LipSync).
+2. **Who deploys or uses the built image** must **independently** hold NVIDIA NIM licensing / NGC entitlement for those models. Baking weights into an image does **not** transfer or substitute for a customer’s license.
+3. **Do not distribute** a runtime image containing baked NIM weights to parties who lack the applicable NVIDIA agreements.
+
+Users accept NVIDIA license terms when accessing these containers and models from NGC. See the license links in the tables above.

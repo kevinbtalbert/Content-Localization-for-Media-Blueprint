@@ -5,14 +5,14 @@ description: |
   mode in the app — settings persist across restarts.
 author: Cloudera
 specification_version: 1.0
-prototype_version: 1.2
+prototype_version: 1.4
 date: "2026-08-31"
 
 runtimes:
   - editor: JupyterLab
     kernel: Python 3.13
     edition: ContentLocalization
-    version: "1.2"
+    version: "1.4"
 
 tasks:
   - type: run_session

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Unified Content Localization image for Docker Hub and Cloudera AI Workbench.
+# Unified Content Localization image for Cloudera AI Workbench (and optional local docker-compose).
 #
 # Build (requires NGC login for nvcr.io NIM stages + model prefetch):
 #   echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
@@ -8,13 +8,8 @@
 # Or manually:
 #   ./scripts/docker/prefetch-nim-model-caches.sh
 #   docker build -t content-localization:1.2.0-turing .
-# Push:
-#   docker push <dockerhub-user>/content-localization:1.2.0
 #
-# Run full stack:
-#   docker run --gpus all -v /var/run/docker.sock:/var/run/docker.sock \
-#     --env-file configs/elevenlabs.env --env-file .env -p 3000:3000 \
-#     <dockerhub-user>/content-localization:latest
+# Push to your organization's private registry (see cai/README.md).
 
 # ---------------------------------------------------------------------------
 # Stage 1 — grpcurl (gRPC health checks)
@@ -115,6 +110,13 @@ RUN --mount=from=nim-asd,source=/,target=/nim-src,readonly \
     done; \
     bash /tmp/record-nim-bundle-entrypoint.sh "${NIM_BUNDLE_ROOT}/asd"
 
+# Bundled NIM trees are copied from nvcr as root; cdsw must write symlinks under opt/nim/.cache at runtime.
+RUN set -eux; \
+    for nim in lipsync asd; do \
+      rm -rf "${NIM_BUNDLE_ROOT}/${nim}/opt/nim/.cache"; \
+    done; \
+    chown -R cdsw:cdsw "${NIM_BUNDLE_ROOT}/lipsync" "${NIM_BUNDLE_ROOT}/asd"
+
 # Baked NIM model weights (prefetch on build host — see scripts/docker/prefetch-nim-model-caches.sh).
 COPY build/nim-model-cache/lipsync /opt/nvidia-nim/baked-model-cache/lipsync
 COPY build/nim-model-cache/asd /opt/nvidia-nim/baked-model-cache/asd
@@ -151,9 +153,9 @@ COPY --from=demo-builder --chown=cdsw:cdsw /build/demo/.next ./client/demos/.nex
 
 ENV PYTHONPATH="${APP_ROOT}:${APP_ROOT}/src:${APP_ROOT}/client:${APP_ROOT}/protos/generated" \
     ML_RUNTIME_EDITION="ContentLocalization" \
-    ML_RUNTIME_SHORT_VERSION="1.2" \
+    ML_RUNTIME_SHORT_VERSION="1.4" \
     ML_RUNTIME_MAINTENANCE_VERSION=0 \
-    ML_RUNTIME_FULL_VERSION="1.2.0-content-localization" \
+    ML_RUNTIME_FULL_VERSION="1.4.0-content-localization" \
     ML_RUNTIME_DESCRIPTION="Content Localization with bundled LipSync/ASD NIM servers, CUDA 3.13, Node.js, and grpcurl" \
     LIPSYNC_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/lipsync \
     ASD_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/asd \
