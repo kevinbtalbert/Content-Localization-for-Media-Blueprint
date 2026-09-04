@@ -114,12 +114,18 @@ prefetch_one() {
 
     local bytes
     bytes="$(du -sb "${work_dir}" 2>/dev/null | awk '{print $1}' || echo 0)"
+    local health_ok=0
     if curl -sf "http://127.0.0.1:${host_http}/v1/health/ready" >/dev/null 2>&1; then
+      health_ok=1
+    fi
+    if (( health_ok && bytes >= min_ready_bytes )); then
       ready=1
       echo "${name}: health ready ($(du -sh "${work_dir}" | awk '{print $1}'))"
       break
     fi
-    if (( bytes != last_bytes && bytes >= MIN_BYTES )); then
+    if (( health_ok && bytes >= MIN_BYTES )); then
+      echo "${name}: health ready at $(du -sh "${work_dir}" | awk '{print $1}') — waiting for cache >= $(numfmt --to=iec-i --suffix=B "${min_ready_bytes}" 2>/dev/null || echo "${min_ready_bytes} bytes") ..."
+    elif (( bytes != last_bytes && bytes >= MIN_BYTES )); then
       echo "${name}: cache growing $(du -sh "${work_dir}" | awk '{print $1}') (waiting for /v1/health/ready) ..."
     fi
     last_bytes="${bytes}"
