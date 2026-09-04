@@ -133,6 +133,22 @@ class CMLClient:
     def resolve_runtime(self) -> str:
         return get_runtime_identifier()
 
+    def configure_project_resources(
+        self,
+        *,
+        shared_memory_limit_mb: int = 8192,
+        project: str | None = None,
+    ) -> bool:
+        """Ensure project engines get enough /dev/shm for Triton NIMs (default 8192 MB)."""
+        pid = project or project_id()
+        url = f"{self.base_url}/projects/{pid}"
+        response = self.session.patch(
+            url,
+            json={"shared_memory_limit": shared_memory_limit_mb},
+            timeout=60,
+        )
+        return response.status_code in {200, 202}
+
     def get_application(self, app_id: str, project: str | None = None) -> ApplicationInfo:
         pid = project or project_id()
         url = f"{self.base_url}/projects/{pid}/applications/{app_id}"

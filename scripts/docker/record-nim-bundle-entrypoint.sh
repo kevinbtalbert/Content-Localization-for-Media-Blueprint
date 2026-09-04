@@ -7,6 +7,10 @@ entrypoint_file="${bundle_root}/entrypoint"
 
 if [[ -f "${bundle_root}/opt/nvidia/nvidia_entrypoint.sh" ]]; then
   printf '%s\n' "${bundle_root}/opt/nvidia/nvidia_entrypoint.sh" >"${entrypoint_file}"
+  # Wrapper must pass start_server.sh — nvidia_entrypoint.sh alone execs bash and exits.
+  if [[ -f "${bundle_root}/opt/nim/start_server.sh" ]]; then
+    printf '%s\n' "${bundle_root}/opt/nim/start_server.sh" >"${bundle_root}/start_server"
+  fi
   exit 0
 fi
 

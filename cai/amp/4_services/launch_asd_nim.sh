@@ -10,6 +10,7 @@ mkdir -p "${project}/cai/config"
 exec > >(tee -a "${nim_log}") 2>&1
 echo "=== ASD NIM launcher $(date -Iseconds) ==="
 echo "Engine type: ${CDSW_ENGINE_TYPE:-unknown}  Pod IP: ${CDSW_IP_ADDRESS:-unknown}"
+echo "/dev/shm: $(df -h /dev/shm 2>/dev/null | awk 'NR==2 {print $2 " total, " $4 " avail"}' || echo unknown)"
 echo "Application log mirror: ${nim_log}"
 
 if ! nvidia-smi -L >/dev/null 2>&1; then
@@ -70,7 +71,11 @@ echo "Started NIM sidecar (app port ${app_port}, logs: ${sidecar_log})"
   while true; do
     if [[ -d "${cache}" ]]; then
       size="$(du -sh "${cache}" 2>/dev/null | awk '{print $1}')"
-      echo "[$(date -Iseconds)] Model cache ${cache}: ${size} (growing until NIM reports ready)"
+      if curl -sf "http://127.0.0.1:${NIM_HTTP_API_PORT:-8005}/v1/health/ready" >/dev/null 2>&1; then
+        echo "[$(date -Iseconds)] ASD NIM ready on :${NIM_HTTP_API_PORT:-8005} (cache ${size})"
+        break
+      fi
+      echo "[$(date -Iseconds)] Model cache ${cache}: ${size} (waiting for /v1/health/ready on :${NIM_HTTP_API_PORT:-8005})"
     fi
     sleep 120
   done

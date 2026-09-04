@@ -539,6 +539,13 @@ def build_pipeline(config: AppConfig | None = None) -> dict[str, Any]:
 
         client = CMLClient()
 
+        if not client.configure_project_resources():
+            print(
+                "Warning: could not PATCH project shared_memory_limit; "
+                "set Project Settings → Engine → Advanced → 8192 MB manually.",
+                flush=True,
+            )
+
         set_step(
             "cleanup",
             "running",

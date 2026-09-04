@@ -31,9 +31,12 @@ if [[ "${NVIDIA_VISIBLE_DEVICES:-}" == "void" || "${NVIDIA_VISIBLE_DEVICES:-}" =
 fi
 
 shm_mb="$(df -m /dev/shm 2>/dev/null | awk 'NR==2 {print $2}' || echo 0)"
-if [[ "${shm_mb}" =~ ^[0-9]+$ ]] && (( shm_mb < 1024 )); then
-  echo "WARNING: /dev/shm is only ${shm_mb}M — LipSync/ASD need ~4–8G." >&2
-  echo "         Project Settings → Engine → Advanced → Shared Memory Limit → 8192 MB." >&2
+echo "/dev/shm: $(df -h /dev/shm 2>/dev/null | awk 'NR==2 {print $2 " total, " $3 " used, " $4 " avail"}' || echo unknown)"
+if [[ "${shm_mb}" =~ ^[0-9]+$ ]] && (( shm_mb < 4096 )); then
+  echo "ERROR: /dev/shm is only ${shm_mb}M — LipSync/ASD Triton needs ~4–8 GB." >&2
+  echo "  Project Settings → Engine → Advanced → Shared Memory Limit → 8192 MB" >&2
+  echo "  Then delete and recreate LipSync/ASD apps from Launchpad (or Redeploy AMP)." >&2
+  exit 1
 fi
 
 cache_min_bytes() {
@@ -140,6 +143,40 @@ if [[ -d "${bundle_root}/usr/local/bin" ]]; then
   export PATH="${bundle_root}/usr/local/bin:${PATH}"
 fi
 
+# NIM start_server is a Python script (nimlib). CAI runtime is Python 3.13; the bundle ships
+# its own interpreter + site-packages under usr/local/ from the nvcr.io NIM image.
+resolve_nim_python() {
+  local bundle="$1"
+  local py site
+  for py in \
+    "${bundle}/usr/local/bin/python3" \
+    "${bundle}/usr/local/bin/python"; do
+    [[ -x "${py}" ]] || continue
+    for site in "${bundle}/usr/local/lib"/python3.*/dist-packages; do
+      [[ -d "${site}/nimlib" ]] || continue
+      if PYTHONPATH="${site}" "${py}" -c "import nimlib" 2>/dev/null; then
+        export PYTHONPATH="${site}${PYTHONPATH:+:${PYTHONPATH}}"
+        printf '%s\n' "${py}"
+        return 0
+      fi
+    done
+  done
+  return 1
+}
+
+resolve_start_server() {
+  local bundle="$1"
+  if [[ -f "${bundle}/usr/local/bin/start_server" ]]; then
+    printf '%s\n' "${bundle}/usr/local/bin/start_server"
+    return 0
+  fi
+  if [[ -f "${bundle}/opt/nim/start_server.sh" ]]; then
+    printf '%s\n' "${bundle}/opt/nim/start_server.sh"
+    return 0
+  fi
+  find "${bundle}" \( -path '*/usr/local/bin/start_server' -o -path '*/opt/nim/start_server.sh' \) -type f 2>/dev/null | head -1
+}
+
 entrypoint="$(tr -d '\n' <"${entrypoint_file}")"
 if [[ ! -e "${entrypoint}" ]]; then
   echo "ERROR: NIM entrypoint not found: ${entrypoint}" >&2
@@ -149,12 +186,43 @@ if [[ ! -x "${entrypoint}" ]]; then
   chmod +x "${entrypoint}" 2>/dev/null || true
 fi
 
-echo "Starting bundled ${nim_type} NIM: ${entrypoint}"
+start_server="$(resolve_start_server "${bundle_root}")"
+nim_python="$(resolve_nim_python "${bundle_root}" || true)"
+if [[ -z "${start_server}" || ! -f "${start_server}" ]]; then
+  echo "ERROR: could not find NIM start_server under ${bundle_root}." >&2
+  echo "  Expected usr/local/bin/start_server or opt/nim/start_server.sh from the NIM image." >&2
+  exit 1
+fi
+if [[ -z "${nim_python}" ]]; then
+  echo "ERROR: bundled NIM Python with nimlib not found under ${bundle_root}/usr/local." >&2
+  echo "  Rebuild the ContentLocalization image (Dockerfile NIM copy stages)." >&2
+  exit 1
+fi
+chmod +x "${start_server}" 2>/dev/null || true
+
+# start_server.sh execs /usr/local/bin/start_server (absolute). Run nimlib with the bundled
+# NIM interpreter so packages and native extensions match the nvcr.io image.
+if [[ "${start_server}" == */usr/local/bin/start_server ]]; then
+  server_argv=("${nim_python}" "${start_server}")
+elif [[ "${start_server}" == *.sh ]]; then
+  server_argv=("${nim_python}" "-m" "nimlib.start_server")
+else
+  server_argv=("${nim_python}" "${start_server}")
+fi
+
+# Official NIM images use WORKDIR /opt/nim; keep relative paths in start_server working.
+if [[ -d "${bundle_root}/opt/nim" ]]; then
+  cd "${bundle_root}/opt/nim"
+fi
+
+echo "Starting bundled ${nim_type} NIM: ${entrypoint} ${server_argv[*]}"
 echo "  NIM_CACHE_PATH=${NIM_CACHE_PATH}"
 echo "  NIM_CACHE_DIR=${NIM_CACHE_DIR}"
+echo "  NIM_PYTHON=${nim_python} ($("${nim_python}" --version 2>&1 | head -1))"
+echo "  PYTHONPATH=${PYTHONPATH:-}"
 echo "  NGC_API_KEY set: $([ -n "${NGC_API_KEY:-}" ] && echo yes || echo NO)"
 echo "  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-unset}"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi -L || true
 fi
-exec "${entrypoint}"
+exec "${entrypoint}" "${server_argv[@]}"
