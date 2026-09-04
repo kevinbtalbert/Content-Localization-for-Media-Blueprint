@@ -8,8 +8,8 @@
 #   docker compose --env-file configs/elevenlabs.env --env-file .env up --build
 #
 # Optional pre-built image:
-#   docker build -t content-localization:1.4.0-turing .
-#   IMAGE=content-localization:1.4.0-turing docker compose up
+#   docker build -t content-localization:1.5.0-turing .
+#   IMAGE=content-localization:1.5.0-turing docker compose up
 
 services:
   content-localization:
