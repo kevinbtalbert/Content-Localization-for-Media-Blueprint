@@ -53,7 +53,7 @@ print_prefetch_plan() {
   nim_validate_prefetch_gpu "${NIM_PREFETCH_GPU}" || exit 1
 
   if [[ "${NIM_PREFETCH_GPU_ARCH:-unknown}" != "unknown" ]]; then
-    echo "Image will be tagged: content-localization:1.6.0-${NIM_PREFETCH_GPU_ARCH} (via build script)"
+    echo "Image will be tagged: content-localization:1.7.0-${NIM_PREFETCH_GPU_ARCH} (via build script)"
     echo
   fi
 }
@@ -185,4 +185,4 @@ echo "  GPU arch: ${arch}"
 echo
 echo "Prefetch complete. Build the runtime image with:"
 echo "  ./scripts/docker/build-content-localization-image.sh"
-echo "  → tag: content-localization:1.6.0-${arch}"
+echo "  → tag: content-localization:1.7.0-${arch}"

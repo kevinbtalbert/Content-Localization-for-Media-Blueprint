@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke test bundled LipSync NIM in a GPU Workbench session (ContentLocalization 1.6+).
+# Smoke test bundled LipSync NIM in a GPU Workbench session (ContentLocalization 1.7+).
 #
 # Confirms the launcher fix before redeploying GPU applications:
 #   git pull && bash cai/amp/0_spike/smoke_bundled_lipsync_nim.sh
@@ -59,7 +59,7 @@ echo "NGC_API_KEY: set"
 
 step "Bundle + launcher"
 if [[ ! -f "${bundle}/entrypoint" ]]; then
-  echo "ERROR: LipSync bundle missing at ${bundle} — register ContentLocalization 1.6 runtime." >&2
+  echo "ERROR: LipSync bundle missing at ${bundle} — register ContentLocalization 1.7 runtime." >&2
   exit 1
 fi
 if [[ ! -f "${launcher}" ]]; then

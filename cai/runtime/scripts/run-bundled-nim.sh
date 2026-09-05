@@ -319,7 +319,7 @@ chmod +x "${start_server}" 2>/dev/null || true
 nim_pythonpath="$(build_nim_pythonpath)"
 if ! PYTHONNOUSERSITE=1 PYTHONPATH="${nim_pythonpath}" "${nim_python}" -c "import wrapt; from opentelemetry.instrumentation.utils import http_status_to_status_code" >/dev/null 2>&1; then
   echo "ERROR: bundled NIM Python is missing runtime deps (wrapt/opentelemetry)." >&2
-  echo "  Rebuild ContentLocalization 1.6+ with updated copy-nim-bundle.sh (dereference dist-packages)." >&2
+  echo "  Rebuild ContentLocalization 1.7+ with updated copy-nim-bundle.sh (dereference dist-packages)." >&2
   echo "  Quick check: PYTHONPATH=${nim_pythonpath} ${nim_python} -c 'import wrapt'" >&2
   exit 1
 fi

@@ -138,9 +138,9 @@ COPY --from=demo-builder --chown=cdsw:cdsw /build/demo/.next ./client/demos/.nex
 
 ENV PYTHONPATH="${APP_ROOT}:${APP_ROOT}/src:${APP_ROOT}/client:${APP_ROOT}/protos/generated" \
     ML_RUNTIME_EDITION="ContentLocalization" \
-    ML_RUNTIME_SHORT_VERSION="1.6" \
+    ML_RUNTIME_SHORT_VERSION="1.7" \
     ML_RUNTIME_MAINTENANCE_VERSION=0 \
-    ML_RUNTIME_FULL_VERSION="1.6.0-content-localization" \
+    ML_RUNTIME_FULL_VERSION="1.7.0-content-localization" \
     ML_RUNTIME_DESCRIPTION="Content Localization with bundled LipSync/ASD NIM servers, CUDA 3.13, Node.js, and grpcurl" \
     LIPSYNC_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/lipsync \
     ASD_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/asd \
