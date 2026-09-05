@@ -270,7 +270,7 @@ See the main [README.md](../README.md) for additional local development options.
 | Docker daemon not running during build | Start Docker Desktop; `docker info` must work before `docker build` |
 | `docker login` or NIM pull fails | Check NGC key and LipSync private access; never commit the key — use `export` in shell only |
 | NIM application fails at startup | Verify `NGC_API_KEY`; first start downloads models (15–30 min) |
-| NIM exits after Triton banner, no `:8004`/`:8005` | **Bundled launcher** writes `/opt/nim/.bundled_nim_launch_{lipsync,asd}.sh` (entrypoint `cd`s to `/opt/nim`, not the bundle tree) and passes that **absolute path** to `nvidia_entrypoint.sh`. **`exec: .bundled_nim_launch.sh: not found`** → `git pull` (wrapper was under `/opt/nvidia-nim/.../opt/nim` in older launchers). **`ModuleNotFoundError: nimlib`** → rebuild runtime with `copy-nim-bundle.sh`. |
+| NIM exits after Triton banner, no `:8004`/`:8005` | **Bundled launcher** links bundle `opt/nim` into `/opt/nim` (manifest, etc.) and writes `/opt/nim/.bundled_nim_launch_{lipsync,asd}.sh`. **`ModelManifestMissing`** → `git pull` (need `link_bundle_opt_nim_layout`). **`exec: .bundled_nim_launch.sh: not found`** → same. **`ModuleNotFoundError: nimlib`** → rebuild runtime with `copy-nim-bundle.sh`. |
 | Controller cannot reach NIM | Check `cai/config/runtime_endpoints.env` pod IPs; verify network policy allows gRPC between pods |
 | AMP timeout on NIM startup | First NIM start downloads models — allow 15–30 min; check NGC key and LipSync private access |
 | Single GPU only | Deploy LipSync only; use `bypass_asd=True` in client requests |

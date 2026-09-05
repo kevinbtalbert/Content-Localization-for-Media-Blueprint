@@ -73,6 +73,13 @@ if ! PYTHONPATH="${site}" "${py}" -c "import nimlib" >/dev/null 2>&1; then
 fi
 echo "nimlib import OK: ${nimlib_dir}/__init__.py"
 
+manifest="$(find "${dest}/opt/nim" -path '*/etc/model_manifest.yaml' -type f 2>/dev/null | head -1 || true)"
+if [[ -z "${manifest}" && ! -f "${dest}/opt/nim/etc/default/model_manifest.yaml" ]]; then
+  echo "ERROR: model manifest missing under ${dest}/opt/nim/etc" >&2
+  exit 1
+fi
+echo "model manifest OK: ${manifest:-${dest}/opt/nim/etc/default/model_manifest.yaml}"
+
 if [[ ! -f "${dest}/usr/local/bin/start_server" ]]; then
   echo "ERROR: usr/local/bin/start_server missing under ${dest}" >&2
   exit 1

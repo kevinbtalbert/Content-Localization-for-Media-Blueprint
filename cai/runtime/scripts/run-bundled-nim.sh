@@ -111,6 +111,51 @@ if ! ln -sfn "${NIM_CACHE_PATH}" /opt/nim/.cache; then
 fi
 export NIM_CACHE_DIR="/opt/nim/.cache"
 
+# nimlib reads /opt/nim/etc/model_manifest.yaml (and LICENSE, etc.). Only .cache was linked before.
+link_bundle_opt_nim_layout() {
+  local bundle_nim="${bundle_root}/opt/nim"
+  local item name target manifest
+
+  if [[ ! -d "${bundle_nim}" ]]; then
+    echo "ERROR: bundle opt/nim missing at ${bundle_nim}" >&2
+    exit 1
+  fi
+  if [[ ! -w /opt/nim ]]; then
+    echo "ERROR: /opt/nim is not writable — cannot link bundled NIM layout." >&2
+    exit 1
+  fi
+
+  shopt -s nullglob dotglob
+  for item in "${bundle_nim}"/* "${bundle_nim}"/.[!.]* "${bundle_nim}"/..?*; do
+    [[ -e "${item}" ]] || continue
+    name="$(basename "${item}")"
+    [[ "${name}" == ".cache" ]] && continue
+    [[ "${name}" == .bundled_nim_launch_* ]] && continue
+    target="/opt/nim/${name}"
+    if [[ -e "${target}" && ! -L "${target}" ]]; then
+      rm -rf "${target}"
+    fi
+    ln -sfn "${item}" "${target}"
+  done
+  shopt -u nullglob dotglob
+
+  manifest="/opt/nim/etc/model_manifest.yaml"
+  if [[ ! -f "${manifest}" ]]; then
+    manifest="$(find "${bundle_nim}" -path '*/etc/model_manifest.yaml' -type f 2>/dev/null | head -1 || true)"
+  fi
+  if [[ -z "${manifest}" || ! -f "${manifest}" ]]; then
+    manifest="/opt/nim/etc/default/model_manifest.yaml"
+  fi
+  if [[ ! -f "${manifest}" ]]; then
+    echo "ERROR: NIM model manifest not found under ${bundle_nim} or /opt/nim/etc." >&2
+    exit 1
+  fi
+  export NIM_MANIFEST_PATH="${NIM_MANIFEST_PATH:-${manifest}}"
+  echo "Linked bundled opt/nim layout into /opt/nim (manifest: ${NIM_MANIFEST_PATH})"
+}
+
+link_bundle_opt_nim_layout
+
 # Also link inside the bundle tree for entrypoints that resolve relative to opt/nim.
 bundle_cache="${bundle_root}/opt/nim/.cache"
 if [[ -d "${bundle_root}/opt/nim" ]]; then
@@ -241,14 +286,13 @@ if [[ ! -d /opt/nim ]] || [[ ! -w /opt/nim ]]; then
   echo "ERROR: /opt/nim is not writable — cannot create NIM launch wrapper." >&2
   exit 1
 fi
-nim_workdir="${bundle_root}/opt/nim"
-if [[ ! -d "${nim_workdir}" ]]; then
-  nim_workdir="/opt/nim"
-fi
+nim_workdir="/opt/nim"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'set -euo pipefail' \
   "export PYTHONPATH=\"${nim_site}\${PYTHONPATH:+:\${PYTHONPATH}}\"" \
+  "export NIM_MANIFEST_PATH=\"${NIM_MANIFEST_PATH:-}\"" \
+  "export NIM_CACHE_DIR=\"/opt/nim/.cache\"" \
   "cd \"${nim_workdir}\"" \
   "exec \"${nim_python}\" \"${start_server}\"" \
   >"${launch_wrapper}"
@@ -265,6 +309,7 @@ echo "  NIM_PYTHON=${nim_python} ($("${nim_python}" --version 2>&1 | head -1))"
 echo "  NIM_SITE=${nim_site}"
 echo "  START_SERVER=${start_server}"
 echo "  LAUNCH_WRAPPER=${launch_wrapper}"
+echo "  NIM_MANIFEST_PATH=${NIM_MANIFEST_PATH:-unset}"
 echo "  PYTHONPATH=${PYTHONPATH:-}"
 echo "  NGC_API_KEY set: $([ -n "${NGC_API_KEY:-}" ] && echo yes || echo NO)"
 echo "  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-unset}"

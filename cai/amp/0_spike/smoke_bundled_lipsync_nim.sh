@@ -73,12 +73,17 @@ chmod +x "${launcher}" 2>/dev/null || true
 echo "Bundle entrypoint: $(tr -d '\n' <"${bundle}/entrypoint")"
 echo "Launcher:          ${launcher}"
 
+if ! grep -q 'link_bundle_opt_nim_layout' "${launcher}"; then
+  echo "ERROR: launcher is missing /opt/nim layout link fix." >&2
+  echo "  Run: git pull origin main" >&2
+  exit 1
+fi
 if ! grep -q '/opt/nim/\.bundled_nim_launch_' "${launcher}"; then
   echo "ERROR: launcher is missing the /opt/nim launch wrapper fix." >&2
   echo "  Run: git pull origin main" >&2
   exit 1
 fi
-echo "Launcher /opt/nim wrapper fix: present"
+echo "Launcher fixes: present (wrapper + /opt/nim layout)"
 
 step "Bundled python + nimlib"
 py=""
@@ -104,6 +109,11 @@ if [[ -z "${py}" ]]; then
 fi
 echo "NIM python: ${py} ($("${py}" --version 2>&1 | head -1))"
 echo "nimlib site: ${site}"
+if [[ ! -f "${bundle}/opt/nim/etc/model_manifest.yaml" && ! -f "${bundle}/opt/nim/etc/default/model_manifest.yaml" ]]; then
+  echo "ERROR: model manifest missing under ${bundle}/opt/nim/etc" >&2
+  exit 1
+fi
+echo "Model manifest: present in bundle"
 
 baked="/opt/nvidia-nim/baked-model-cache/lipsync"
 cache="${project}/volumes/models/lipsync-smoke"
