@@ -137,11 +137,19 @@ step "Start bundled LipSync NIM (background)"
 mkdir -p "$(dirname "${log}")"
 : >"${log}"
 
-export NIM_HTTP_API_PORT="${http_port}"
-export NIM_GRPC_API_PORT="${NIM_GRPC_API_PORT:-50054}"
-export NIM_TAGS_SELECTOR="${LIPSYNC_NIM_TAGS_SELECTOR:-language=de}"
+python3 - <<'PY'
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))))
+from cai.lib.nim_runtime import configure_lipsync_env
+
+configure_lipsync_env()
+PY
+# shellcheck source=/dev/null
+source "${project}/cai/config/lipsync_nim.env"
 export NIM_CACHE_PATH="${cache}"
-export NIM_MAX_CONCURRENCY_PER_GPU="${NIM_MAX_CONCURRENCY_PER_GPU:-1}"
 
 echo "Log: ${log}"
 echo "Waiting for http://127.0.0.1:${http_port}/v1/health/ready (timeout ${timeout_s}s) ..."

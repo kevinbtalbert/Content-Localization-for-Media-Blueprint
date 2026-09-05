@@ -130,6 +130,7 @@ link_bundle_opt_nim_layout() {
     [[ -e "${item}" ]] || continue
     name="$(basename "${item}")"
     [[ "${name}" == ".cache" ]] && continue
+    [[ "${name}" == "workspace" ]] && continue
     [[ "${name}" == .bundled_nim_launch_* ]] && continue
     target="/opt/nim/${name}"
     if [[ -e "${target}" && ! -L "${target}" ]]; then
@@ -151,7 +152,42 @@ link_bundle_opt_nim_layout() {
     exit 1
   fi
   export NIM_MANIFEST_PATH="${NIM_MANIFEST_PATH:-${manifest}}"
+  mkdir -p /opt/nim/workspace
   echo "Linked bundled opt/nim layout into /opt/nim (manifest: ${NIM_MANIFEST_PATH})"
+}
+
+configure_nim_runtime_env() {
+  case "${nim_type}" in
+    lipsync)
+      export NIM_HTTP_API_PORT="${NIM_HTTP_API_PORT:-${LIPSYNC_NIM_HTTP_API_PORT:-8004}}"
+      export NIM_GRPC_API_PORT="${NIM_GRPC_API_PORT:-${LIPSYNC_NIM_GRPC_API_PORT:-50054}}"
+      export NIM_TAGS_SELECTOR="${NIM_TAGS_SELECTOR:-${LIPSYNC_NIM_TAGS_SELECTOR:-language=de}}"
+      ;;
+    asd)
+      export NIM_HTTP_API_PORT="${NIM_HTTP_API_PORT:-${ASD_NIM_HTTP_API_PORT:-8005}}"
+      export NIM_GRPC_API_PORT="${NIM_GRPC_API_PORT:-${ASD_GRPC_API_PORT:-50055}}"
+      ;;
+  esac
+  export NIM_MAX_CONCURRENCY_PER_GPU="${NIM_MAX_CONCURRENCY_PER_GPU:-1}"
+}
+
+build_nim_pythonpath() {
+  local -a parts=()
+  local d
+  if [[ -n "${nim_site}" ]]; then
+    parts+=("${nim_site}")
+  fi
+  for d in \
+    "${bundle_root}/usr/local/lib/python3.12/dist-packages" \
+    "${bundle_root}/usr/lib/python3.12/dist-packages" \
+    "${bundle_root}/usr/lib/python3/dist-packages" \
+    "/opt/nim"; do
+    if [[ -d "${d}" ]]; then
+      parts+=("${d}")
+    fi
+  done
+  local IFS=:
+  echo "${parts[*]}"
 }
 
 link_bundle_opt_nim_layout
@@ -280,6 +316,10 @@ if [[ -z "${nim_python}" ]]; then
 fi
 chmod +x "${start_server}" 2>/dev/null || true
 
+configure_nim_runtime_env
+nim_pythonpath="$(build_nim_pythonpath)"
+nim_ld_library_path="${LD_LIBRARY_PATH:-}"
+
 # nvidia_entrypoint.sh cds to /opt/nim (not the bundle prefix) before exec — wrapper must live there.
 launch_wrapper="/opt/nim/.bundled_nim_launch_${nim_type}.sh"
 if [[ ! -d /opt/nim ]] || [[ ! -w /opt/nim ]]; then
@@ -290,9 +330,18 @@ nim_workdir="/opt/nim"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'set -euo pipefail' \
-  "export PYTHONPATH=\"${nim_site}\${PYTHONPATH:+:\${PYTHONPATH}}\"" \
+  'export PYTHONNOUSERSITE=1' \
+  "export PYTHONPATH=\"${nim_pythonpath}\"" \
+  "export LD_LIBRARY_PATH=\"${nim_ld_library_path}\"" \
   "export NIM_MANIFEST_PATH=\"${NIM_MANIFEST_PATH:-}\"" \
   "export NIM_CACHE_DIR=\"/opt/nim/.cache\"" \
+  "export NIM_CACHE_PATH=\"${NIM_CACHE_PATH}\"" \
+  "export NIM_HTTP_API_PORT=\"${NIM_HTTP_API_PORT}\"" \
+  "export NIM_GRPC_API_PORT=\"${NIM_GRPC_API_PORT}\"" \
+  "export NIM_TAGS_SELECTOR=\"${NIM_TAGS_SELECTOR:-}\"" \
+  "export NIM_MAX_CONCURRENCY_PER_GPU=\"${NIM_MAX_CONCURRENCY_PER_GPU}\"" \
+  "export NGC_API_KEY=\"${NGC_API_KEY:-}\"" \
+  "export NVIDIA_VISIBLE_DEVICES=\"${NVIDIA_VISIBLE_DEVICES:-}\"" \
   "cd \"${nim_workdir}\"" \
   "exec \"${nim_python}\" \"${start_server}\"" \
   >"${launch_wrapper}"
@@ -310,6 +359,10 @@ echo "  NIM_SITE=${nim_site}"
 echo "  START_SERVER=${start_server}"
 echo "  LAUNCH_WRAPPER=${launch_wrapper}"
 echo "  NIM_MANIFEST_PATH=${NIM_MANIFEST_PATH:-unset}"
+echo "  NIM_HTTP_API_PORT=${NIM_HTTP_API_PORT}"
+echo "  NIM_GRPC_API_PORT=${NIM_GRPC_API_PORT}"
+echo "  NIM_TAGS_SELECTOR=${NIM_TAGS_SELECTOR:-unset}"
+echo "  NIM_PYTHONPATH=${nim_pythonpath}"
 echo "  PYTHONPATH=${PYTHONPATH:-}"
 echo "  NGC_API_KEY set: $([ -n "${NGC_API_KEY:-}" ] && echo yes || echo NO)"
 echo "  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-unset}"
