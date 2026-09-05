@@ -83,7 +83,14 @@ fi
 py="$(find "${dest}" \( -path '*/usr/bin/python3*' -o -path '*/usr/local/bin/python3*' \) -type f 2>/dev/null | head -1)"
 nimlib_dir="$(find "${dest}" -path '*/dist-packages/nimlib' -type d 2>/dev/null | head -1)"
 site="$(dirname "${nimlib_dir}")"
+dali_wheel="${dest}/opt/tritonserver/backends/dali/wheel/dali"
+bundle_pythonpath="${dali_wheel}:${site}:${dest}/opt/nim"
 export LD_LIBRARY_PATH="${dest}/usr/local/lib:${dest}/usr/local/lib64:${dest}/usr/lib/x86_64-linux-gnu:${dest}/usr/lib:${dest}/lib/x86_64-linux-gnu:${dest}/lib:${LD_LIBRARY_PATH:-}"
+if [[ ! -d "${dali_wheel}/wrapt" ]]; then
+  echo "ERROR: Triton DALI wheel (wrapt) missing at ${dali_wheel}" >&2
+  echo "  Ensure opt/tritonserver is copied from the NIM image." >&2
+  exit 1
+fi
 if ! PYTHONPATH="${site}" "${py}" -c "import nimlib" >/dev/null 2>&1; then
   echo "ERROR: bundled python cannot import nimlib under ${dest}" >&2
   echo "  python=${py}  site=${site}" >&2
@@ -91,14 +98,14 @@ if ! PYTHONPATH="${site}" "${py}" -c "import nimlib" >/dev/null 2>&1; then
 fi
 echo "nimlib import OK: ${nimlib_dir}/__init__.py"
 
-if ! PYTHONPATH="${site}" "${py}" -c "import wrapt" >/dev/null 2>&1; then
-  echo "ERROR: bundled python cannot import wrapt (opentelemetry dep) under ${dest}" >&2
-  echo "  Re-run copy with dereferenced dist-packages (see copy_python_site)." >&2
+if ! PYTHONPATH="${bundle_pythonpath}" "${py}" -c "import wrapt" >/dev/null 2>&1; then
+  echo "ERROR: bundled python cannot import wrapt under ${dest}" >&2
+  echo "  Expected PYTHONPATH to include ${dali_wheel} (NIM sets this via DALI wheel)." >&2
   exit 1
 fi
-echo "wrapt import OK"
+echo "wrapt import OK: ${dali_wheel}/wrapt"
 
-if ! PYTHONPATH="${site}" "${py}" -c "from opentelemetry.instrumentation.utils import http_status_to_status_code" >/dev/null 2>&1; then
+if ! PYTHONPATH="${bundle_pythonpath}" "${py}" -c "from opentelemetry.instrumentation.utils import http_status_to_status_code" >/dev/null 2>&1; then
   echo "ERROR: bundled python cannot import opentelemetry instrumentation deps under ${dest}" >&2
   exit 1
 fi

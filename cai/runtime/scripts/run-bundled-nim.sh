@@ -173,7 +173,10 @@ configure_nim_runtime_env() {
 
 build_nim_pythonpath() {
   local -a parts=()
-  local d
+  local d dali_wheel="${bundle_root}/opt/tritonserver/backends/dali/wheel/dali"
+  if [[ -d "${dali_wheel}" ]]; then
+    parts+=("${dali_wheel}")
+  fi
   if [[ -n "${nim_site}" ]]; then
     parts+=("${nim_site}")
   fi

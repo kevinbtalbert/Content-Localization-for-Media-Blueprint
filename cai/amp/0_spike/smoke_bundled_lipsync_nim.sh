@@ -109,11 +109,12 @@ if [[ -z "${py}" ]]; then
 fi
 echo "NIM python: ${py} ($("${py}" --version 2>&1 | head -1))"
 echo "nimlib site: ${site}"
-if ! PYTHONNOUSERSITE=1 PYTHONPATH="${site}:/opt/nim" "${py}" -c "import wrapt" >/dev/null 2>&1; then
-  echo "ERROR: bundled NIM missing Python dep 'wrapt' — rebuild runtime image (copy-nim-bundle.sh fix)." >&2
+dali_wheel="${bundle}/opt/tritonserver/backends/dali/wheel/dali"
+if ! PYTHONNOUSERSITE=1 PYTHONPATH="${dali_wheel}:${site}:/opt/nim" "${py}" -c "import wrapt" >/dev/null 2>&1; then
+  echo "ERROR: bundled NIM missing wrapt (need DALI wheel on PYTHONPATH) — rebuild runtime 1.7+." >&2
   exit 1
 fi
-echo "wrapt: import OK"
+echo "wrapt: import OK (${dali_wheel})"
 if [[ ! -f "${bundle}/opt/nim/etc/model_manifest.yaml" && ! -f "${bundle}/opt/nim/etc/default/model_manifest.yaml" ]]; then
   echo "ERROR: model manifest missing under ${bundle}/opt/nim/etc" >&2
   exit 1
