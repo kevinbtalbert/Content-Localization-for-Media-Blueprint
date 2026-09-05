@@ -169,7 +169,7 @@ nim_read_gpu_arch() {
 # Compose docker tags: repo:version-arch (+ optional registry mirror).
 nim_compose_image_tags() {
   local repo="${1:-content-localization}"
-  local version="${2:-1.7.0}"
+  local version="${2:-1.8.0}"
   local arch="${3:-unknown}"
   local registry="${4:-}"
 

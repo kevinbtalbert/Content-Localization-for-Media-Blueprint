@@ -171,6 +171,79 @@ configure_nim_runtime_env() {
   export NIM_MAX_CONCURRENCY_PER_GPU="${NIM_MAX_CONCURRENCY_PER_GPU:-1}"
 }
 
+# NIM images bake these into ENV; bundled exec must restore them or inference fails
+# (GrpcNIMApiInterface service_class None, ASD profile not found, missing Triton paths).
+configure_nim_image_env() {
+  export NIM_DISABLE_GRPC_STARTUP="${NIM_DISABLE_GRPC_STARTUP:-1}"
+  export NIM_DIR_PATH="${NIM_DIR_PATH:-/opt/nim}"
+  export NIM_LIB_PATH="${NIM_LIB_PATH:-/opt/nim/nimlib}"
+  export NIM_USE_MULTIPROCESSING_FOR_INFERENCE="${NIM_USE_MULTIPROCESSING_FOR_INFERENCE:-true}"
+  export NIM_INFERENCE_TYPE="${NIM_INFERENCE_TYPE:-grpc}"
+  export NIM_USE_MODEL_MANIFEST_V0="${NIM_USE_MODEL_MANIFEST_V0:-False}"
+  export TRITON_SERVER_GPU_ENABLED="${TRITON_SERVER_GPU_ENABLED:-1}"
+
+  case "${nim_type}" in
+    lipsync)
+      export NIM_CUSTOM_NIM_SELECTION_CRITERIA_PROVIDER_CLASS="${NIM_CUSTOM_NIM_SELECTION_CRITERIA_PROVIDER_CLASS:-inference:ModelSelectionCriteriaProvider}"
+      export NVCF_MODELS_DIR="${NVCF_MODELS_DIR:-/config/models/lipsync}"
+      export NIM_MODEL_NAME="${NIM_MODEL_NAME:-Lipsync}"
+      export NIM_NAME="${NIM_NAME:-lipsync}"
+      ;;
+    asd)
+      export NIM_CUSTOM_NIM_SELECTION_CRITERIA_PROVIDER_CLASS="${NIM_CUSTOM_NIM_SELECTION_CRITERIA_PROVIDER_CLASS:-inference:MaxineSelectionCriteriaProvider}"
+      export NVCF_MODELS_DIR="${NVCF_MODELS_DIR:-/config/models/active-speaker-detection}"
+      export NIM_MODEL_NAME="${NIM_MODEL_NAME:-active-speaker-detection}"
+      export NIM_NAME="${NIM_NAME:-active-speaker-detection}"
+      export MAXINE_MAX_CONCURRENCY_PER_GPU="${MAXINE_MAX_CONCURRENCY_PER_GPU:-1}"
+      export NV_AI4M_MAX_CONCURRENCY_PER_GPU="${NV_AI4M_MAX_CONCURRENCY_PER_GPU:-1}"
+      ;;
+  esac
+}
+
+link_bundle_service_roots() {
+  local name src target missing=0
+
+  mkdir -p /config/models 2>/dev/null || true
+
+  case "${nim_type}" in
+    lipsync)
+      for name in lipsync maxine; do
+        src="${bundle_root}/opt/${name}"
+        if [[ ! -d "${src}" ]]; then
+          echo "ERROR: bundled ${name} service tree missing at ${src}" >&2
+          echo "  Rebuild ContentLocalization 1.8+ (copy-nim-bundle copies opt/lipsync + opt/maxine)." >&2
+          missing=1
+          continue
+        fi
+        target="/opt/${name}"
+        if [[ -e "${target}" && ! -L "${target}" ]]; then
+          rm -rf "${target}"
+        fi
+        ln -sfn "${src}" "${target}"
+        echo "Linked bundled service path ${target} -> ${src}"
+      done
+      ;;
+    asd)
+      src="${bundle_root}/opt/ai4m"
+      if [[ ! -d "${src}" ]]; then
+        echo "ERROR: bundled ai4m service tree missing at ${src}" >&2
+        echo "  Rebuild ContentLocalization 1.8+ (copy-nim-bundle copies opt/ai4m)." >&2
+        missing=1
+      else
+        target="/opt/ai4m"
+        if [[ -e "${target}" && ! -L "${target}" ]]; then
+          rm -rf "${target}"
+        fi
+        ln -sfn "${src}" "${target}"
+        echo "Linked bundled service path ${target} -> ${src}"
+      fi
+      ;;
+  esac
+  if (( missing )); then
+    exit 1
+  fi
+}
+
 build_nim_pythonpath() {
   local -a parts=()
   local d dali_wheel="${bundle_root}/opt/tritonserver/backends/dali/wheel/dali"
@@ -194,6 +267,8 @@ build_nim_pythonpath() {
 }
 
 link_bundle_opt_nim_layout
+
+link_bundle_service_roots
 
 # Also link inside the bundle tree for entrypoints that resolve relative to opt/nim.
 bundle_cache="${bundle_root}/opt/nim/.cache"
@@ -229,6 +304,12 @@ done
 
 if [[ -d "${bundle_root}/usr/local/bin" ]]; then
   export PATH="${bundle_root}/usr/local/bin:${PATH}"
+fi
+if [[ -d "${bundle_root}/usr/bin" ]]; then
+  export PATH="${bundle_root}/usr/bin:${PATH}"
+fi
+if [[ -d "${bundle_root}/opt/tritonserver/bin" ]]; then
+  export PATH="${bundle_root}/opt/tritonserver/bin:${PATH}"
 fi
 
 # NIM start_server is a Python script (nimlib). CAI runtime is Python 3.13; the bundle ships
@@ -322,13 +403,15 @@ chmod +x "${start_server}" 2>/dev/null || true
 nim_pythonpath="$(build_nim_pythonpath)"
 if ! PYTHONNOUSERSITE=1 PYTHONPATH="${nim_pythonpath}" "${nim_python}" -c "import wrapt; from opentelemetry.instrumentation.utils import http_status_to_status_code" >/dev/null 2>&1; then
   echo "ERROR: bundled NIM Python is missing runtime deps (wrapt/opentelemetry)." >&2
-  echo "  Rebuild ContentLocalization 1.7+ with updated copy-nim-bundle.sh (dereference dist-packages)." >&2
+  echo "  Rebuild ContentLocalization 1.8+ with updated copy-nim-bundle.sh (dereference dist-packages)." >&2
   echo "  Quick check: PYTHONPATH=${nim_pythonpath} ${nim_python} -c 'import wrapt'" >&2
   exit 1
 fi
 
 configure_nim_runtime_env
+configure_nim_image_env
 nim_ld_library_path="${LD_LIBRARY_PATH:-}"
+nim_path="${PATH:-}"
 
 # nvidia_entrypoint.sh cds to /opt/nim (not the bundle prefix) before exec — wrapper must live there.
 launch_wrapper="/opt/nim/.bundled_nim_launch_${nim_type}.sh"
@@ -342,6 +425,7 @@ printf '%s\n' \
   'set -euo pipefail' \
   'export PYTHONNOUSERSITE=1' \
   "export PYTHONPATH=\"${nim_pythonpath}\"" \
+  "export PATH=\"${nim_path}\"" \
   "export LD_LIBRARY_PATH=\"${nim_ld_library_path}\"" \
   "export NIM_MANIFEST_PATH=\"${NIM_MANIFEST_PATH:-}\"" \
   "export NIM_CACHE_DIR=\"/opt/nim/.cache\"" \
@@ -350,6 +434,20 @@ printf '%s\n' \
   "export NIM_GRPC_API_PORT=\"${NIM_GRPC_API_PORT}\"" \
   "export NIM_TAGS_SELECTOR=\"${NIM_TAGS_SELECTOR:-}\"" \
   "export NIM_MAX_CONCURRENCY_PER_GPU=\"${NIM_MAX_CONCURRENCY_PER_GPU}\"" \
+  "export NIM_DISABLE_GRPC_STARTUP=\"${NIM_DISABLE_GRPC_STARTUP}\"" \
+  "export NIM_CUSTOM_NIM_SELECTION_CRITERIA_PROVIDER_CLASS=\"${NIM_CUSTOM_NIM_SELECTION_CRITERIA_PROVIDER_CLASS}\"" \
+  "export NIM_DIR_PATH=\"${NIM_DIR_PATH}\"" \
+  "export NIM_LIB_PATH=\"${NIM_LIB_PATH}\"" \
+  "export NIM_USE_MULTIPROCESSING_FOR_INFERENCE=\"${NIM_USE_MULTIPROCESSING_FOR_INFERENCE}\"" \
+  "export NIM_INFERENCE_TYPE=\"${NIM_INFERENCE_TYPE}\"" \
+  "export NIM_USE_MODEL_MANIFEST_V0=\"${NIM_USE_MODEL_MANIFEST_V0}\"" \
+  "export NIM_MODEL_NAME=\"${NIM_MODEL_NAME}\"" \
+  "export NIM_NAME=\"${NIM_NAME}\"" \
+  "export NVCF_MODELS_DIR=\"${NVCF_MODELS_DIR}\"" \
+  "export TRITON_SERVER_GPU_ENABLED=\"${TRITON_SERVER_GPU_ENABLED}\"" \
+  "export MAXINE_MAX_CONCURRENCY_PER_GPU=\"${MAXINE_MAX_CONCURRENCY_PER_GPU:-}\"" \
+  "export NV_AI4M_MAX_CONCURRENCY_PER_GPU=\"${NV_AI4M_MAX_CONCURRENCY_PER_GPU:-}\"" \
+  "export LIPSYNC_DEBUG_MODE=\"${LIPSYNC_DEBUG_MODE:-0}\"" \
   "export NGC_API_KEY=\"${NGC_API_KEY:-}\"" \
   "export NVIDIA_VISIBLE_DEVICES=\"${NVIDIA_VISIBLE_DEVICES:-}\"" \
   "cd \"${nim_workdir}\"" \
@@ -372,6 +470,9 @@ echo "  NIM_MANIFEST_PATH=${NIM_MANIFEST_PATH:-unset}"
 echo "  NIM_HTTP_API_PORT=${NIM_HTTP_API_PORT}"
 echo "  NIM_GRPC_API_PORT=${NIM_GRPC_API_PORT}"
 echo "  NIM_TAGS_SELECTOR=${NIM_TAGS_SELECTOR:-unset}"
+echo "  NIM_DISABLE_GRPC_STARTUP=${NIM_DISABLE_GRPC_STARTUP}"
+echo "  NIM_CUSTOM_NIM_SELECTION_CRITERIA_PROVIDER_CLASS=${NIM_CUSTOM_NIM_SELECTION_CRITERIA_PROVIDER_CLASS}"
+echo "  NVCF_MODELS_DIR=${NVCF_MODELS_DIR}"
 echo "  NIM_PYTHONPATH=${nim_pythonpath}"
 echo "  PYTHONPATH=${PYTHONPATH:-}"
 echo "  NGC_API_KEY set: $([ -n "${NGC_API_KEY:-}" ] && echo yes || echo NO)"

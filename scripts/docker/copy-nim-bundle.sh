@@ -6,7 +6,8 @@ set -euo pipefail
 
 src="${1:?source root (e.g. /nim-src)}"
 dest="${2:?bundle dest (e.g. /opt/nvidia-nim/lipsync)}"
-record_script="${3:-/tmp/record-nim-bundle-entrypoint.sh}"
+nim_kind="${3:-}"
+record_script="${4:-/tmp/record-nim-bundle-entrypoint.sh}"
 
 src="${src%/}"
 dest="${dest%/}"
@@ -33,6 +34,18 @@ for rel in \
   lib64; do
   copy_tree "${rel}"
 done
+
+# Maxine gRPC/Triton paths are outside opt/nim but required at runtime (/opt/lipsync, /opt/maxine, /opt/ai4m).
+case "${nim_kind}" in
+  lipsync)
+    for rel in opt/lipsync opt/maxine; do
+      copy_tree "${rel}"
+    done
+    ;;
+  asd)
+    copy_tree "opt/ai4m"
+    ;;
+esac
 
 # Python deps (wrapt, etc.) are often symlinks into paths outside copied trees — dereference site dirs.
 copy_python_site() {
@@ -122,5 +135,35 @@ if [[ ! -f "${dest}/usr/local/bin/start_server" ]]; then
   echo "ERROR: usr/local/bin/start_server missing under ${dest}" >&2
   exit 1
 fi
+
+case "${nim_kind}" in
+  lipsync)
+    if [[ ! -f "${dest}/opt/lipsync/grpc/run_grpc_service.sh" ]]; then
+      echo "ERROR: opt/lipsync/grpc/run_grpc_service.sh missing under ${dest}" >&2
+      exit 1
+    fi
+    if [[ ! -d "${dest}/opt/maxine/models" ]]; then
+      echo "ERROR: opt/maxine/models missing under ${dest}" >&2
+      exit 1
+    fi
+    echo "maxine/lipsync service paths OK"
+    ;;
+  asd)
+    if [[ ! -f "${dest}/opt/ai4m/active-speaker-detection/grpc/run_grpc_service.sh" ]]; then
+      echo "ERROR: opt/ai4m/active-speaker-detection/grpc/run_grpc_service.sh missing under ${dest}" >&2
+      exit 1
+    fi
+    if [[ ! -d "${dest}/opt/ai4m/active-speaker-detection/models" ]]; then
+      echo "ERROR: opt/ai4m/active-speaker-detection/models missing under ${dest}" >&2
+      exit 1
+    fi
+    if [[ ! -x "${dest}/usr/local/bin/activespeakerdetection-service" ]] \
+      && ! find "${dest}/usr/local/bin" -name 'activespeakerdetection-service' -type f 2>/dev/null | grep -q .; then
+      echo "ERROR: activespeakerdetection-service missing under ${dest}/usr/local/bin" >&2
+      exit 1
+    fi
+    echo "ai4m/asd service paths OK"
+    ;;
+esac
 
 bash "${record_script}" "${dest}"

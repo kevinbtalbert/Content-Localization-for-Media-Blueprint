@@ -91,9 +91,9 @@ COPY scripts/docker/record-nim-bundle-entrypoint.sh /tmp/record-nim-bundle-entry
 COPY scripts/docker/copy-nim-bundle.sh /tmp/copy-nim-bundle.sh
 RUN chmod +x /tmp/record-nim-bundle-entrypoint.sh /tmp/copy-nim-bundle.sh
 RUN --mount=from=nim-lipsync,source=/,target=/nim-src,readonly \
-    bash /tmp/copy-nim-bundle.sh /nim-src "${NIM_BUNDLE_ROOT}/lipsync"
+    bash /tmp/copy-nim-bundle.sh /nim-src "${NIM_BUNDLE_ROOT}/lipsync" lipsync /tmp/record-nim-bundle-entrypoint.sh
 RUN --mount=from=nim-asd,source=/,target=/nim-src,readonly \
-    bash /tmp/copy-nim-bundle.sh /nim-src "${NIM_BUNDLE_ROOT}/asd"
+    bash /tmp/copy-nim-bundle.sh /nim-src "${NIM_BUNDLE_ROOT}/asd" asd /tmp/record-nim-bundle-entrypoint.sh
 
 # Bundled NIM trees are copied from nvcr as root; cdsw must write symlinks under opt/nim/.cache at runtime.
 RUN set -eux; \
@@ -138,9 +138,9 @@ COPY --from=demo-builder --chown=cdsw:cdsw /build/demo/.next ./client/demos/.nex
 
 ENV PYTHONPATH="${APP_ROOT}:${APP_ROOT}/src:${APP_ROOT}/client:${APP_ROOT}/protos/generated" \
     ML_RUNTIME_EDITION="ContentLocalization" \
-    ML_RUNTIME_SHORT_VERSION="1.7" \
+    ML_RUNTIME_SHORT_VERSION="1.8" \
     ML_RUNTIME_MAINTENANCE_VERSION=0 \
-    ML_RUNTIME_FULL_VERSION="1.7.0-content-localization" \
+    ML_RUNTIME_FULL_VERSION="1.8.0-content-localization" \
     ML_RUNTIME_DESCRIPTION="Content Localization with bundled LipSync/ASD NIM servers, CUDA 3.13, Node.js, and grpcurl" \
     LIPSYNC_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/lipsync \
     ASD_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/asd \

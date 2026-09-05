@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke test bundled LipSync NIM in a GPU Workbench session (ContentLocalization 1.7+).
+# Smoke test bundled LipSync NIM in a GPU Workbench session (ContentLocalization 1.8+).
 #
 # Confirms the launcher fix before redeploying GPU applications:
 #   git pull && bash cai/amp/0_spike/smoke_bundled_lipsync_nim.sh
@@ -59,7 +59,7 @@ echo "NGC_API_KEY: set"
 
 step "Bundle + launcher"
 if [[ ! -f "${bundle}/entrypoint" ]]; then
-  echo "ERROR: LipSync bundle missing at ${bundle} — register ContentLocalization 1.7 runtime." >&2
+  echo "ERROR: LipSync bundle missing at ${bundle} — register ContentLocalization 1.8 runtime." >&2
   exit 1
 fi
 if [[ ! -f "${launcher}" ]]; then
@@ -83,7 +83,18 @@ if ! grep -q '/opt/nim/\.bundled_nim_launch_' "${launcher}"; then
   echo "  Run: git pull origin main" >&2
   exit 1
 fi
-echo "Launcher fixes: present (wrapper + /opt/nim layout)"
+if ! grep -q 'NIM_DISABLE_GRPC_STARTUP' "${launcher}"; then
+  echo "ERROR: launcher is missing NIM_DISABLE_GRPC_STARTUP (GrpcNIMApiInterface fix)." >&2
+  echo "  Run: git pull origin main" >&2
+  exit 1
+fi
+if [[ ! -f "${bundle}/opt/lipsync/grpc/run_grpc_service.sh" || ! -d "${bundle}/opt/maxine/models" ]]; then
+  echo "ERROR: bundled LipSync service paths missing (opt/lipsync, opt/maxine)." >&2
+  echo "  Rebuild ContentLocalization 1.8+ on a GPU build host, then re-register the runtime." >&2
+  exit 1
+fi
+echo "Launcher fixes: present (wrapper + /opt/nim layout + NIM image env)"
+echo "Service paths: opt/lipsync + opt/maxine present in bundle"
 
 step "Bundled python + nimlib"
 py=""
@@ -111,7 +122,7 @@ echo "NIM python: ${py} ($("${py}" --version 2>&1 | head -1))"
 echo "nimlib site: ${site}"
 dali_wheel="${bundle}/opt/tritonserver/backends/dali/wheel/dali"
 if ! PYTHONNOUSERSITE=1 PYTHONPATH="${dali_wheel}:${site}:/opt/nim" "${py}" -c "import wrapt" >/dev/null 2>&1; then
-  echo "ERROR: bundled NIM missing wrapt (need DALI wheel on PYTHONPATH) — rebuild runtime 1.7+." >&2
+  echo "ERROR: bundled NIM missing wrapt (need DALI wheel on PYTHONPATH) — rebuild runtime 1.8+." >&2
   exit 1
 fi
 echo "wrapt: import OK (${dali_wheel})"

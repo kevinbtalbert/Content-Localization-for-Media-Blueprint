@@ -5,7 +5,7 @@
 #   export NGC_API_KEY=...
 #
 # Optional:
-#   CONTENT_LOCALIZATION_VERSION=1.7.0
+#   CONTENT_LOCALIZATION_VERSION=1.8.0
 #   CONTENT_LOCALIZATION_REPO=content-localization
 #   CONTENT_LOCALIZATION_REGISTRY=<registry>/<namespace>/content-localization   # optional private registry tag
 #   CONTENT_LOCALIZATION_IMAGE=...   # full override — disables auto arch suffix
@@ -25,7 +25,7 @@ cd "${root}"
 # shellcheck source=scripts/docker/nim-gpu-arch.sh
 source "${root}/scripts/docker/nim-gpu-arch.sh"
 
-VERSION="${CONTENT_LOCALIZATION_VERSION:-1.7.0}"
+VERSION="${CONTENT_LOCALIZATION_VERSION:-1.8.0}"
 REPO="${CONTENT_LOCALIZATION_REPO:-content-localization}"
 REGISTRY="${CONTENT_LOCALIZATION_REGISTRY:-}"
 META_DIR="${root}/build/nim-model-cache"
