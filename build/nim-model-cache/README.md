@@ -24,7 +24,7 @@ See [NIMLICENSES.md](../../NIMLICENSES.md). Do not distribute baked-weight image
 | `NIM_PREFETCH_TIMEOUT_S` | No | `7200` | Max seconds to wait for each NIM `/v1/health/ready` |
 | `NIM_PREFETCH_MIN_BYTES_LIPSYNC` | No | 3 GiB | Refuse to stage LipSync cache smaller than this after health ready |
 | `NIM_PREFETCH_MIN_BYTES_ASD` | No | 2 GiB | Refuse to stage ASD cache smaller than this after health ready |
-| `CONTENT_LOCALIZATION_IMAGE` | No | `content-localization:1.5.0-turing` | Override auto-tagging (disables arch suffix) |
+| `CONTENT_LOCALIZATION_IMAGE` | No | `content-localization:1.6.0-turing` | Override auto-tagging (disables arch suffix) |
 | `CONTENT_LOCALIZATION_REGISTRY` | No | `<registry>/<namespace>/content-localization` | Optional second tag for your private registry |
 
 ```bash
@@ -32,14 +32,14 @@ export NGC_API_KEY=...
 echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
 # optional: export CONTENT_LOCALIZATION_REGISTRY=<registry>/<namespace>/content-localization
 ./scripts/docker/build-content-localization-image.sh
-# → content-localization:1.5.0-turing (+ registry tag when set)
+# → content-localization:1.6.0-turing (+ registry tag when set)
 ```
 
 Or prefetch only:
 
 ```bash
 ./scripts/docker/prefetch-nim-model-caches.sh
-docker build --platform linux/amd64 -t content-localization:1.5.0-turing .
+docker build --platform linux/amd64 -t content-localization:1.6.0-turing .
 ```
 
 ## Supported GPUs
@@ -48,10 +48,10 @@ LipSync and ASD require **Tensor cores** plus **NVENC and NVDEC** (video encode/
 
 | Architecture | Example SKUs | Build tag suggestion |
 |--------------|--------------|----------------------|
-| **Turing** | T4, RTX 20xx | `:1.5.0-turing` |
-| **Ampere** | A2, A10, A16, A40, L4 | `:1.5.0-ampere` |
-| **Ada** | L40, L40S, RTX 4090 | `:1.5.0-ada` |
-| **Blackwell** | B40, RTX 5080/5090 | `:1.5.0-blackwell` |
+| **Turing** | T4, RTX 20xx | `:1.6.0-turing` |
+| **Ampere** | A2, A10, A16, A40, L4 | `:1.6.0-ampere` |
+| **Ada** | L40, L40S, RTX 4090 | `:1.6.0-ada` |
+| **Blackwell** | B40, RTX 5080/5090 | `:1.6.0-blackwell` |
 
 **Not supported:** A100, H100, B100 (no NVENC/NVDEC on these datacenter GPUs).
 

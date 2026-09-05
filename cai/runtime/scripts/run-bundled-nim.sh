@@ -130,6 +130,10 @@ fi
 lib_paths=(
   "${bundle_root}/usr/local/lib"
   "${bundle_root}/usr/local/lib64"
+  "${bundle_root}/usr/lib/x86_64-linux-gnu"
+  "${bundle_root}/usr/lib"
+  "${bundle_root}/lib/x86_64-linux-gnu"
+  "${bundle_root}/lib"
   "${bundle_root}/opt/nim/lib"
   "${bundle_root}/opt/tritonserver/lib"
 )
@@ -147,13 +151,25 @@ fi
 # its own interpreter + site-packages under usr/local/ from the nvcr.io NIM image.
 resolve_nim_python() {
   local bundle="$1"
-  local py site
-  for py in \
-    "${bundle}/usr/local/bin/python3" \
-    "${bundle}/usr/local/bin/python"; do
+  local py site nimlib_dir
+  local -a pythons=() nimlib_dirs=()
+
+  while IFS= read -r nimlib_dir; do
+    nimlib_dirs+=("${nimlib_dir}")
+  done < <(find "${bundle}" -path '*/dist-packages/nimlib' -type d 2>/dev/null | sort -u)
+
+  while IFS= read -r py; do
+    pythons+=("${py}")
+  done < <(
+    find "${bundle}" \
+      \( -path '*/usr/local/bin/python3*' -o -path '*/usr/bin/python3*' -o -path '*/opt/nim/*/bin/python3*' \) \
+      -type f 2>/dev/null | sort -u
+  )
+
+  for py in "${pythons[@]}"; do
     [[ -x "${py}" ]] || continue
-    for site in "${bundle}/usr/local/lib"/python3.*/dist-packages; do
-      [[ -d "${site}/nimlib" ]] || continue
+    for nimlib_dir in "${nimlib_dirs[@]}"; do
+      site="$(dirname "${nimlib_dir}")"
       if PYTHONPATH="${site}" "${py}" -c "import nimlib" 2>/dev/null; then
         export PYTHONPATH="${site}${PYTHONPATH:+:${PYTHONPATH}}"
         printf '%s\n' "${py}"
@@ -161,6 +177,13 @@ resolve_nim_python() {
       fi
     done
   done
+
+  echo "DEBUG: searched ${bundle} for NIM python + nimlib:" >&2
+  echo "  nimlib: ${nimlib_dirs[*]:-(none)}" >&2
+  echo "  python: ${pythons[*]:-(none)}" >&2
+  if [[ -L "${bundle}/usr/local/bin/python3" ]]; then
+    echo "  usr/local/bin/python3 -> $(readlink "${bundle}/usr/local/bin/python3" 2>/dev/null || echo broken)" >&2
+  fi
   return 1
 }
 
@@ -194,8 +217,12 @@ if [[ -z "${start_server}" || ! -f "${start_server}" ]]; then
   exit 1
 fi
 if [[ -z "${nim_python}" ]]; then
-  echo "ERROR: bundled NIM Python with nimlib not found under ${bundle_root}/usr/local." >&2
-  echo "  Rebuild the ContentLocalization image (Dockerfile NIM copy stages)." >&2
+  echo "ERROR: bundled NIM Python with nimlib not found under ${bundle_root}." >&2
+  echo "  Likely cause: python3 in the NIM image is a symlink to /usr/bin (not copied in older images)." >&2
+  echo "  Fix: rebuild ContentLocalization with scripts/docker/copy-nim-bundle.sh (see Dockerfile)." >&2
+  echo "  Check on this pod:" >&2
+  echo "    find ${bundle_root} -path '*/dist-packages/nimlib' -type d" >&2
+  echo "    ls -la ${bundle_root}/usr/local/bin/python3 ${bundle_root}/usr/bin/python3 2>/dev/null" >&2
   exit 1
 fi
 chmod +x "${start_server}" 2>/dev/null || true

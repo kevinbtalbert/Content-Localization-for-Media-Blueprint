@@ -100,12 +100,12 @@ echo "$NGC_API_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
 # export CONTENT_LOCALIZATION_REGISTRY=<registry-host>/<namespace>/content-localization
 
 ./scripts/docker/build-content-localization-image.sh
-# → content-localization:1.5.0-<gpu-arch>  (e.g. :1.5.0-turing)
+# → content-localization:1.6.0-<gpu-arch>  (e.g. :1.6.0-turing)
 
 unset NGC_API_KEY
 
 # Push to your organization's registry (not documented here — use your internal process)
-docker push <registry>/<namespace>/content-localization:1.5.0-turing
+docker push <registry>/<namespace>/content-localization:1.6.0-turing
 ```
 
 Only distribute the pushed image to customers who hold their own NVIDIA NIM / NGC entitlement for LipSync and ASD.
@@ -116,7 +116,7 @@ After the build, confirm bundled NIM trees exist:
 
 ```bash
 docker run --rm --platform linux/amd64 \
-  <your-runtime-image>:1.5.0-turing \
+  <your-runtime-image>:1.6.0-turing \
   bash -lc 'test -f /opt/nvidia-nim/lipsync/entrypoint && test -f /opt/nvidia-nim/asd/entrypoint && echo OK'
 ```
 
@@ -141,7 +141,7 @@ Expected output: `OK`. If either `entrypoint` file is missing, the NIM copy stag
 
 **Approximate image size:** ~35–45 GB with baked caches (~25 GB without). Prefetch prints exact LipSync/ASD cache sizes.
 
-**GPU architecture:** Build on the **same class** as CAI (e.g. T4 → tag `content-localization:1.5.0-turing`). One image runs on other supported GPUs, but a different arch may spend 5–15 minutes recompiling engines on first start.
+**GPU architecture:** Build on the **same class** as CAI (e.g. T4 → tag `content-localization:1.6.0-turing`). One image runs on other supported GPUs, but a different arch may spend 5–15 minutes recompiling engines on first start.
 
 **Build with models (required for CAI):**
 
@@ -163,7 +163,7 @@ Plain `docker build` without prefetch **fails** — `build/nim-model-cache/` mus
 
 Register **one** runtime in **Admin → Runtime Catalog**:
 
-1. Update [`repo-assembly.json`](runtime/repo-assembly.json): set `image_identifier` to your private registry URI (e.g. `<registry>/<namespace>/content-localization:1.5.0-turing`).
+1. Update [`repo-assembly.json`](runtime/repo-assembly.json): set `image_identifier` to your private registry URI (e.g. `<registry>/<namespace>/content-localization:1.6.0-turing`).
 2. Register using [`METADATA.yaml`](runtime/METADATA.yaml) or upload `repo-assembly.json` under **Site Administration → Runtime**.
 3. Confirm catalog fields match the image labels:
 
@@ -172,7 +172,7 @@ Register **one** runtime in **Admin → Runtime Catalog**:
 | Editor | JupyterLab |
 | Kernel | Python 3.13 |
 | Edition | ContentLocalization |
-| Version | 1.5 |
+| Version | 1.6 |
 
 Deprecate older `1.1` registrations after cutover.
 
@@ -189,7 +189,7 @@ The AMP Configure Project screen picks a runtime by matching `.project-metadata.
 | Editor | JupyterLab |
 | Kernel | Python 3.13 |
 | Edition | ContentLocalization |
-| Version | 1.5 |
+| Version | 1.6 |
 
 If Configure Project defaults to **Nvidia GPU / 2026.08**, the custom runtime is not matched. Fix:
 
@@ -270,7 +270,7 @@ See the main [README.md](../README.md) for additional local development options.
 | Docker daemon not running during build | Start Docker Desktop; `docker info` must work before `docker build` |
 | `docker login` or NIM pull fails | Check NGC key and LipSync private access; never commit the key — use `export` in shell only |
 | NIM application fails at startup | Verify `NGC_API_KEY`; first start downloads models (15–30 min) |
-| NIM exits after Triton banner, no `:8004`/`:8005` | **Bundled launcher bug (fixed in `run-bundled-nim.sh`)** — must run `nvidia_entrypoint.sh /opt/nim/start_server.sh`, not bare entrypoint (which execs bash and exits). Also check `df /dev/shm` if still stuck after git pull. |
+| NIM exits after Triton banner, no `:8004`/`:8005` | **Bundled launcher** must run `nvidia_entrypoint.sh` with NIM `python3` + `start_server` (not bare entrypoint). **`ModuleNotFoundError: nimlib`** or **bundled NIM Python not found** → rebuild the runtime image: `copy-nim-bundle.sh` dereferences `python3` symlinks and copies `usr/bin` + `usr/lib` from the nvcr.io NIM stage. |
 | Controller cannot reach NIM | Check `cai/config/runtime_endpoints.env` pod IPs; verify network policy allows gRPC between pods |
 | AMP timeout on NIM startup | First NIM start downloads models — allow 15–30 min; check NGC key and LipSync private access |
 | Single GPU only | Deploy LipSync only; use `bypass_asd=True` in client requests |

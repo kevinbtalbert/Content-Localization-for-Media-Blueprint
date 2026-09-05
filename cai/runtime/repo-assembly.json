@@ -2,14 +2,14 @@
   "assembly_metadata_version": 1,
   "runtimes": [
     {
-      "image_identifier": "<registry>/<namespace>/contentlocalization:1.5.0-turing",
+      "image_identifier": "<registry>/<namespace>/contentlocalization:1.6.0-turing",
       "runtime_metadata_version": 2,
       "editor": "JupyterLab",
       "edition": "ContentLocalization",
       "description": "Content Localization with bundled LipSync/ASD NIM servers, CUDA 3.13, Node.js, and grpcurl",
       "kernel": "Python 3.13",
-      "full_version": "1.5.0-content-localization",
-      "short_version": "1.5",
+      "full_version": "1.6.0-content-localization",
+      "short_version": "1.6",
       "maintenance_version": 0,
       "git_hash": "",
       "gbn": 0

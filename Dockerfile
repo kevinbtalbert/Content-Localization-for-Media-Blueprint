@@ -88,27 +88,12 @@ ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy NIM server trees into isolated prefixes (no Docker socket needed on CAI).
 COPY scripts/docker/record-nim-bundle-entrypoint.sh /tmp/record-nim-bundle-entrypoint.sh
-RUN chmod +x /tmp/record-nim-bundle-entrypoint.sh
+COPY scripts/docker/copy-nim-bundle.sh /tmp/copy-nim-bundle.sh
+RUN chmod +x /tmp/record-nim-bundle-entrypoint.sh /tmp/copy-nim-bundle.sh
 RUN --mount=from=nim-lipsync,source=/,target=/nim-src,readonly \
-    set -eux; \
-    mkdir -p "${NIM_BUNDLE_ROOT}/lipsync"; \
-    for path in opt/nim opt/nvidia opt/tritonserver usr/local/bin usr/local/lib usr/local/lib64; do \
-      if [ -e "/nim-src/${path}" ]; then \
-        mkdir -p "${NIM_BUNDLE_ROOT}/lipsync/$(dirname "${path}")"; \
-        cp -a "/nim-src/${path}" "${NIM_BUNDLE_ROOT}/lipsync/${path}"; \
-      fi; \
-    done; \
-    bash /tmp/record-nim-bundle-entrypoint.sh "${NIM_BUNDLE_ROOT}/lipsync"
+    bash /tmp/copy-nim-bundle.sh /nim-src "${NIM_BUNDLE_ROOT}/lipsync"
 RUN --mount=from=nim-asd,source=/,target=/nim-src,readonly \
-    set -eux; \
-    mkdir -p "${NIM_BUNDLE_ROOT}/asd"; \
-    for path in opt/nim opt/nvidia opt/tritonserver usr/local/bin usr/local/lib usr/local/lib64; do \
-      if [ -e "/nim-src/${path}" ]; then \
-        mkdir -p "${NIM_BUNDLE_ROOT}/asd/$(dirname "${path}")"; \
-        cp -a "/nim-src/${path}" "${NIM_BUNDLE_ROOT}/asd/${path}"; \
-      fi; \
-    done; \
-    bash /tmp/record-nim-bundle-entrypoint.sh "${NIM_BUNDLE_ROOT}/asd"
+    bash /tmp/copy-nim-bundle.sh /nim-src "${NIM_BUNDLE_ROOT}/asd"
 
 # Bundled NIM trees are copied from nvcr as root; cdsw must write symlinks under opt/nim/.cache at runtime.
 RUN set -eux; \
@@ -153,9 +138,9 @@ COPY --from=demo-builder --chown=cdsw:cdsw /build/demo/.next ./client/demos/.nex
 
 ENV PYTHONPATH="${APP_ROOT}:${APP_ROOT}/src:${APP_ROOT}/client:${APP_ROOT}/protos/generated" \
     ML_RUNTIME_EDITION="ContentLocalization" \
-    ML_RUNTIME_SHORT_VERSION="1.5" \
+    ML_RUNTIME_SHORT_VERSION="1.6" \
     ML_RUNTIME_MAINTENANCE_VERSION=0 \
-    ML_RUNTIME_FULL_VERSION="1.5.0-content-localization" \
+    ML_RUNTIME_FULL_VERSION="1.6.0-content-localization" \
     ML_RUNTIME_DESCRIPTION="Content Localization with bundled LipSync/ASD NIM servers, CUDA 3.13, Node.js, and grpcurl" \
     LIPSYNC_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/lipsync \
     ASD_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/asd \
