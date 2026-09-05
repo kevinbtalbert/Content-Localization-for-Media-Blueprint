@@ -316,8 +316,15 @@ if [[ -z "${nim_python}" ]]; then
 fi
 chmod +x "${start_server}" 2>/dev/null || true
 
-configure_nim_runtime_env
 nim_pythonpath="$(build_nim_pythonpath)"
+if ! PYTHONNOUSERSITE=1 PYTHONPATH="${nim_pythonpath}" "${nim_python}" -c "import wrapt; from opentelemetry.instrumentation.utils import http_status_to_status_code" >/dev/null 2>&1; then
+  echo "ERROR: bundled NIM Python is missing runtime deps (wrapt/opentelemetry)." >&2
+  echo "  Rebuild ContentLocalization 1.6+ with updated copy-nim-bundle.sh (dereference dist-packages)." >&2
+  echo "  Quick check: PYTHONPATH=${nim_pythonpath} ${nim_python} -c 'import wrapt'" >&2
+  exit 1
+fi
+
+configure_nim_runtime_env
 nim_ld_library_path="${LD_LIBRARY_PATH:-}"
 
 # nvidia_entrypoint.sh cds to /opt/nim (not the bundle prefix) before exec — wrapper must live there.

@@ -34,6 +34,24 @@ for rel in \
   copy_tree "${rel}"
 done
 
+# Python deps (wrapt, etc.) are often symlinks into paths outside copied trees — dereference site dirs.
+copy_python_site() {
+  local rel
+  for rel in \
+    usr/local/lib/python3.12/dist-packages \
+    usr/local/lib/python3.11/dist-packages \
+    usr/local/lib/python3.10/dist-packages \
+    usr/local/lib/python3.12/site-packages \
+    usr/lib/python3.12/dist-packages \
+    usr/lib/python3/dist-packages; do
+    if [[ -d "${src}/${rel}" ]]; then
+      mkdir -p "${dest}/${rel}"
+      cp -aL "${src}/${rel}/." "${dest}/${rel}/" 2>/dev/null || cp -a "${src}/${rel}/." "${dest}/${rel}/"
+    fi
+  done
+}
+copy_python_site
+
 mkdir -p "${dest}/usr/local/bin" "${dest}/usr/bin"
 if [[ -d "${src}/usr/local/bin" ]]; then
   # Preserve tree first; some NIM images have broken symlinks (ncu, nsys) that break cp -aL on the whole dir.
@@ -72,6 +90,19 @@ if ! PYTHONPATH="${site}" "${py}" -c "import nimlib" >/dev/null 2>&1; then
   exit 1
 fi
 echo "nimlib import OK: ${nimlib_dir}/__init__.py"
+
+if ! PYTHONPATH="${site}" "${py}" -c "import wrapt" >/dev/null 2>&1; then
+  echo "ERROR: bundled python cannot import wrapt (opentelemetry dep) under ${dest}" >&2
+  echo "  Re-run copy with dereferenced dist-packages (see copy_python_site)." >&2
+  exit 1
+fi
+echo "wrapt import OK"
+
+if ! PYTHONPATH="${site}" "${py}" -c "from opentelemetry.instrumentation.utils import http_status_to_status_code" >/dev/null 2>&1; then
+  echo "ERROR: bundled python cannot import opentelemetry instrumentation deps under ${dest}" >&2
+  exit 1
+fi
+echo "opentelemetry import OK"
 
 manifest="$(find "${dest}/opt/nim" -path '*/etc/model_manifest.yaml' -type f 2>/dev/null | head -1 || true)"
 if [[ -z "${manifest}" && ! -f "${dest}/opt/nim/etc/default/model_manifest.yaml" ]]; then
