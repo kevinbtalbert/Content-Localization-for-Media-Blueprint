@@ -130,7 +130,8 @@ if [[ ! -d "${arsdk_backend}" ]]; then
   echo "  Ensure opt/tritonserver is copied from the NIM image." >&2
   exit 1
 fi
-if ! find "${arsdk_backend}" -maxdepth 1 -name 'libtriton_nv_arsdk*.so' -type f 2>/dev/null | grep -q .; then
+if [[ ! -e "${arsdk_backend}/libtriton_nv_arsdk_backend.so" ]] \
+  && ! find "${arsdk_backend}" -maxdepth 1 -name 'libtriton_nv_arsdk_backend.so*' 2>/dev/null | grep -q .; then
   echo "ERROR: nv_arsdk_backend shared library missing under ${arsdk_backend}" >&2
   exit 1
 fi
