@@ -16,29 +16,34 @@ from pathlib import Path
 PROJECT_ROOT = Path(os.environ.get("CDSW_PROJECT_DIR", "/home/cdsw"))
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from cai.lib.nim_runtime import publish_nim_endpoint, wait_for_nim_health  # noqa: E402
+from cai.lib.nim_runtime import publish_nim_endpoint, tcp_port_open, wait_for_nim_ready  # noqa: E402
 
 
 class _AppPortHandler(BaseHTTPRequestHandler):
     nim_http_port: int = 8004
+    nim_grpc_port: int = 50054
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
 
     def do_GET(self) -> None:
         nim_ready = False
+        grpc_ready = False
         try:
             url = f"http://127.0.0.1:{self.nim_http_port}/v1/health/ready"
             with urllib.request.urlopen(url, timeout=5) as response:
                 nim_ready = response.status == 200
         except Exception:
             nim_ready = False
+        grpc_ready = tcp_port_open("127.0.0.1", self.nim_grpc_port)
 
         body = json.dumps(
             {
-                "status": "ok" if nim_ready else "starting",
+                "status": "ok" if (nim_ready and grpc_ready) else "starting",
                 "nim_http_ready": nim_ready,
+                "nim_grpc_ready": grpc_ready,
                 "nim_http_port": self.nim_http_port,
+                "nim_grpc_port": self.nim_grpc_port,
             }
         ).encode()
         self.send_response(200)
@@ -48,23 +53,27 @@ class _AppPortHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def _serve_app_port(port: int, nim_http_port: int) -> None:
+def _serve_app_port(port: int, nim_http_port: int, nim_grpc_port: int) -> None:
     _AppPortHandler.nim_http_port = nim_http_port
+    _AppPortHandler.nim_grpc_port = nim_grpc_port
     server = HTTPServer(("127.0.0.1", port), _AppPortHandler)
     print(f"CAI app port probe listening on 127.0.0.1:{port}", flush=True)
     server.serve_forever()
 
 
 def _publish_after_health(*, name: str, nim_type: str, grpc_port: int, http_port: int) -> None:
-    url = f"http://127.0.0.1:{http_port}/v1/health/ready"
-    print(f"Waiting for {nim_type} NIM health on {url} (publishes nim_endpoints.json when ready) ...", flush=True)
+    print(
+        f"Waiting for {nim_type} NIM on HTTP :{http_port} and gRPC :{grpc_port} "
+        f"(publishes nim_endpoints.json when both ready) ...",
+        flush=True,
+    )
     while True:
         try:
-            wait_for_nim_health(http_port, timeout_s=300)
+            wait_for_nim_ready(http_port, grpc_port)
             break
         except TimeoutError:
             print(
-                f"{nim_type} NIM not ready yet (no listener on :{http_port}); rechecking in 30s ...",
+                f"{nim_type} NIM not ready yet (need HTTP :{http_port} + gRPC :{grpc_port}); rechecking in 30s ...",
                 flush=True,
             )
             time.sleep(30)
@@ -109,7 +118,7 @@ def main() -> int:
         },
         daemon=True,
     ).start()
-    _serve_app_port(args.app_port, args.http_port)
+    _serve_app_port(args.app_port, args.http_port, args.grpc_port)
     return 0
 
 

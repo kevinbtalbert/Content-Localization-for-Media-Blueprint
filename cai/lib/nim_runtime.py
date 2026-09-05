@@ -104,6 +104,53 @@ def nim_bundle_ready(nim_type: str) -> bool:
     return (nim_bundle_path(nim_type) / "entrypoint").is_file()
 
 
+def tcp_port_open(host: str, port: int, *, timeout_s: float = 2.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
+def wait_for_nim_grpc(grpc_port: int, *, host: str = "127.0.0.1", timeout_s: int = 900) -> None:
+    """Wait until the Maxine gRPC server is listening (not just nimlib HTTP health)."""
+    deadline = time.time() + timeout_s
+    last_error = ""
+    while time.time() < deadline:
+        if tcp_port_open(host, grpc_port):
+            return
+        last_error = f"{host}:{grpc_port} not listening"
+        time.sleep(5)
+    raise TimeoutError(f"NIM gRPC not ready on {host}:{grpc_port}: {last_error}")
+
+
+def wait_for_nim_ready(
+    http_port: int,
+    grpc_port: int,
+    *,
+    timeout_s: int = 900,
+    require_grpc: bool = True,
+) -> None:
+    """Wait for nimlib HTTP ready and (by default) Maxine gRPC to bind."""
+    deadline = time.time() + timeout_s
+    http_url = f"http://127.0.0.1:{http_port}/v1/health/ready"
+    last_error = ""
+    while time.time() < deadline:
+        http_ok = False
+        try:
+            with urllib.request.urlopen(http_url, timeout=10) as response:
+                http_ok = response.status == 200
+        except Exception as exc:  # noqa: BLE001
+            last_error = f"http: {exc}"
+        grpc_ok = not require_grpc or tcp_port_open("127.0.0.1", grpc_port)
+        if http_ok and grpc_ok:
+            return
+        if http_ok and require_grpc:
+            last_error = f"http ready but gRPC :{grpc_port} not listening"
+        time.sleep(5)
+    raise TimeoutError(f"NIM readiness failed ({http_url}, gRPC :{grpc_port}): {last_error}")
+
+
 def wait_for_nim_health(http_port: int, *, timeout_s: int = 900) -> None:
     url = f"http://127.0.0.1:{http_port}/v1/health/ready"
     deadline = time.time() + timeout_s
@@ -146,7 +193,7 @@ def _background_publish_after_health(
     http_port: int,
 ) -> None:
     try:
-        wait_for_nim_health(http_port)
+        wait_for_nim_ready(http_port, grpc_port)
         data = publish_nim_endpoint(
             name=name,
             nim_type=nim_type,

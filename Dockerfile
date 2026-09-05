@@ -138,9 +138,9 @@ COPY --from=demo-builder --chown=cdsw:cdsw /build/demo/.next ./client/demos/.nex
 
 ENV PYTHONPATH="${APP_ROOT}:${APP_ROOT}/src:${APP_ROOT}/client:${APP_ROOT}/protos/generated" \
     ML_RUNTIME_EDITION="ContentLocalization" \
-    ML_RUNTIME_SHORT_VERSION="1.8" \
+    ML_RUNTIME_SHORT_VERSION="1.9" \
     ML_RUNTIME_MAINTENANCE_VERSION=0 \
-    ML_RUNTIME_FULL_VERSION="1.8.0-content-localization" \
+    ML_RUNTIME_FULL_VERSION="1.9.0-content-localization" \
     ML_RUNTIME_DESCRIPTION="Content Localization with bundled LipSync/ASD NIM servers, CUDA 3.13, Node.js, and grpcurl" \
     LIPSYNC_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/lipsync \
     ASD_MODEL_MOUNT_PATH=/home/cdsw/volumes/models/asd \
@@ -157,7 +157,10 @@ LABEL org.opencontainers.image.description="Unified NVIDIA Content Localization 
 
 COPY cai/runtime/scripts/cai-runtime-startup.sh /etc/profile.d/content-localization-cai.sh
 COPY cai/runtime/scripts/run-bundled-nim.sh /usr/local/bin/run-bundled-nim
-RUN chmod +x /etc/profile.d/content-localization-cai.sh /usr/local/bin/run-bundled-nim && \
+COPY cai/runtime/scripts/prepare-bundled-nim-models.sh /usr/local/bin/prepare-bundled-nim-models
+RUN chmod +x /etc/profile.d/content-localization-cai.sh \
+    /usr/local/bin/run-bundled-nim \
+    /usr/local/bin/prepare-bundled-nim-models && \
     echo '[ -f /etc/profile.d/content-localization-cai.sh ] && source /etc/profile.d/content-localization-cai.sh' \
         >> /etc/bash.bashrc
 

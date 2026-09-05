@@ -5,7 +5,7 @@ description: |
   mode in the app — settings persist across restarts.
 author: Cloudera
 specification_version: 1.0
-prototype_version: 1.8
+prototype_version: 1.9
 date: "2026-09-05"
 # Additional /dev/shm for sessions (GB). AMP default is 0.0625 (64 MB); LipSync/ASD Triton
 # needs ~4–8 GB (Docker Compose uses --shm-size=8g). See ml-amp.pdf → shared_memory_limit.
@@ -15,7 +15,7 @@ runtimes:
   - editor: JupyterLab
     kernel: Python 3.13
     edition: ContentLocalization
-    version: "1.8"
+    version: "1.9.0"
 
 tasks:
   - type: run_session

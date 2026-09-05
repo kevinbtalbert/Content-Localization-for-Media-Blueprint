@@ -68,14 +68,22 @@ echo "Started NIM sidecar (app port ${app_port}, logs: ${sidecar_log})"
 
 (
   cache="${NIM_CACHE_PATH:-${NIM_CACHE_DIR}}"
+  grpc_port="${NIM_GRPC_API_PORT:-50055}"
   while true; do
     if [[ -d "${cache}" ]]; then
       size="$(du -sh "${cache}" 2>/dev/null | awk '{print $1}')"
-      if curl -sf "http://127.0.0.1:${NIM_HTTP_API_PORT:-8005}/v1/health/ready" >/dev/null 2>&1; then
-        echo "[$(date -Iseconds)] ASD NIM ready on :${NIM_HTTP_API_PORT:-8005} (cache ${size})"
+      http_ok=0 grpc_ok=0
+      curl -sf "http://127.0.0.1:${NIM_HTTP_API_PORT:-8005}/v1/health/ready" >/dev/null 2>&1 && http_ok=1
+      if command -v ss >/dev/null 2>&1; then
+        ss -lnt | grep -q ":${grpc_port} " && grpc_ok=1
+      elif python3 -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', ${grpc_port})); s.close()" 2>/dev/null; then
+        grpc_ok=1
+      fi
+      if (( http_ok && grpc_ok )); then
+        echo "[$(date -Iseconds)] ASD NIM ready on HTTP :${NIM_HTTP_API_PORT:-8005} gRPC :${grpc_port} (cache ${size})"
         break
       fi
-      echo "[$(date -Iseconds)] Model cache ${cache}: ${size} (waiting for /v1/health/ready on :${NIM_HTTP_API_PORT:-8005})"
+      echo "[$(date -Iseconds)] Model cache ${cache}: ${size} (waiting for HTTP :${NIM_HTTP_API_PORT:-8005} + gRPC :${grpc_port})"
     fi
     sleep 120
   done

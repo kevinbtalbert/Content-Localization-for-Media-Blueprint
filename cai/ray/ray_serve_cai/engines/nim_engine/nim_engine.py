@@ -28,19 +28,32 @@ def _pod_ip() -> str:
     return os.environ.get("CDSW_IP_ADDRESS") or socket.gethostbyname(socket.gethostname())
 
 
-def _wait_for_nim_health(http_port: int, timeout_s: int = 900) -> None:
+def _tcp_open(host: str, port: int, *, timeout_s: float = 2.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
+def _wait_for_nim_ready(http_port: int, grpc_port: int, timeout_s: int = 900) -> None:
     url = f"http://127.0.0.1:{http_port}/v1/health/ready"
     deadline = time.time() + timeout_s
     last_error = ""
     while time.time() < deadline:
+        http_ok = False
         try:
             with urllib.request.urlopen(url, timeout=10) as response:
-                if response.status == 200:
-                    return
+                http_ok = response.status == 200
         except Exception as exc:  # noqa: BLE001
-            last_error = str(exc)
+            last_error = f"http: {exc}"
+        grpc_ok = _tcp_open("127.0.0.1", grpc_port)
+        if http_ok and grpc_ok:
+            return
+        if http_ok:
+            last_error = f"gRPC :{grpc_port} not listening"
         time.sleep(5)
-    raise TimeoutError(f"NIM health check failed for {url}: {last_error}")
+    raise TimeoutError(f"NIM readiness failed ({url}, gRPC :{grpc_port}): {last_error}")
 
 
 def _write_endpoint_metadata(name: str, nim_type: str, grpc_port: int, http_port: int) -> None:
@@ -133,7 +146,7 @@ class NIMEngine:
         self.name = engine_config.get("name", engine_config["nim_type"])
 
         self._process = _start_nim_container(engine_config)
-        _wait_for_nim_health(int(engine_config["http_port"]))
+        _wait_for_nim_ready(int(engine_config["http_port"]), int(engine_config["grpc_port"]))
         _write_endpoint_metadata(
             self.name,
             engine_config["nim_type"],

@@ -124,6 +124,18 @@ if ! PYTHONPATH="${bundle_pythonpath}" "${py}" -c "from opentelemetry.instrument
 fi
 echo "opentelemetry import OK"
 
+arsdk_backend="${dest}/opt/tritonserver/backends/nv_arsdk_backend"
+if [[ ! -d "${arsdk_backend}" ]]; then
+  echo "ERROR: nv_arsdk_backend missing at ${arsdk_backend}" >&2
+  echo "  Ensure opt/tritonserver is copied from the NIM image." >&2
+  exit 1
+fi
+if ! find "${arsdk_backend}" -maxdepth 1 -name 'libtriton_nv_arsdk*.so' -type f 2>/dev/null | grep -q .; then
+  echo "ERROR: nv_arsdk_backend shared library missing under ${arsdk_backend}" >&2
+  exit 1
+fi
+echo "nv_arsdk_backend OK: ${arsdk_backend}"
+
 manifest="$(find "${dest}/opt/nim" -path '*/etc/model_manifest.yaml' -type f 2>/dev/null | head -1 || true)"
 if [[ -z "${manifest}" && ! -f "${dest}/opt/nim/etc/default/model_manifest.yaml" ]]; then
   echo "ERROR: model manifest missing under ${dest}/opt/nim/etc" >&2

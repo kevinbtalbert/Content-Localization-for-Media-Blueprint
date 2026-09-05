@@ -25,7 +25,7 @@ cd "${root}"
 # shellcheck source=scripts/docker/nim-gpu-arch.sh
 source "${root}/scripts/docker/nim-gpu-arch.sh"
 
-VERSION="${CONTENT_LOCALIZATION_VERSION:-1.8.0}"
+VERSION="${CONTENT_LOCALIZATION_VERSION:-1.9.0}"
 REPO="${CONTENT_LOCALIZATION_REPO:-content-localization}"
 REGISTRY="${CONTENT_LOCALIZATION_REGISTRY:-}"
 META_DIR="${root}/build/nim-model-cache"

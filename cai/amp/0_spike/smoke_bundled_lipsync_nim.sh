@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke test bundled LipSync NIM in a GPU Workbench session (ContentLocalization 1.8+).
+# Smoke test bundled LipSync NIM in a GPU Workbench session (ContentLocalization 1.9.0+).
 #
 # Confirms the launcher fix before redeploying GPU applications:
 #   git pull && bash cai/amp/0_spike/smoke_bundled_lipsync_nim.sh
@@ -14,6 +14,7 @@ bundle="/opt/nvidia-nim/lipsync"
 launcher="${project}/cai/runtime/scripts/run-bundled-nim.sh"
 log="${project}/cai/config/smoke_lipsync_nim.log"
 http_port="${NIM_HTTP_API_PORT:-8004}"
+grpc_port="${NIM_GRPC_API_PORT:-50054}"
 timeout_s=900
 check_only=0
 nim_pid=""
@@ -93,7 +94,24 @@ if [[ ! -f "${bundle}/opt/lipsync/grpc/run_grpc_service.sh" || ! -d "${bundle}/o
   echo "  Rebuild ContentLocalization 1.8+ on a GPU build host, then re-register the runtime." >&2
   exit 1
 fi
-echo "Launcher fixes: present (wrapper + /opt/nim layout + NIM image env)"
+if ! grep -q 'link_bundle_tritonserver' "${launcher}"; then
+  echo "ERROR: launcher is missing /opt/tritonserver link fix." >&2
+  echo "  Run: git pull origin main" >&2
+  exit 1
+fi
+prepare="${project}/cai/runtime/scripts/prepare-bundled-nim-models.sh"
+if [[ ! -f "${prepare}" ]]; then
+  prepare="/usr/local/bin/prepare-bundled-nim-models"
+fi
+if [[ ! -f "${prepare}" ]]; then
+  echo "ERROR: prepare-bundled-nim-models.sh missing." >&2
+  exit 1
+fi
+if [[ ! -d "${bundle}/opt/tritonserver/backends/nv_arsdk_backend" ]]; then
+  echo "ERROR: nv_arsdk_backend missing in bundle — rebuild runtime 1.9.0+." >&2
+  exit 1
+fi
+echo "Launcher fixes: present (triton + model paths + NIM image env)"
 echo "Service paths: opt/lipsync + opt/maxine present in bundle"
 
 step "Bundled python + nimlib"
@@ -150,6 +168,15 @@ if (( check_only )); then
   exit 0
 fi
 
+grpc_listening() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -lnt | grep -q ":${port} "
+    return
+  fi
+  python3 -c "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1', ${port})); s.close()" 2>/dev/null
+}
+
 step "Start bundled LipSync NIM (background)"
 mkdir -p "$(dirname "${log}")"
 : >"${log}"
@@ -169,7 +196,7 @@ source "${project}/cai/config/lipsync_nim.env"
 export NIM_CACHE_PATH="${cache}"
 
 echo "Log: ${log}"
-echo "Waiting for http://127.0.0.1:${http_port}/v1/health/ready (timeout ${timeout_s}s) ..."
+echo "Waiting for HTTP :${http_port} and gRPC :${grpc_port} (timeout ${timeout_s}s) ..."
 "${launcher}" lipsync >>"${log}" 2>&1 &
 nim_pid=$!
 echo "NIM pid: ${nim_pid}"
@@ -181,9 +208,12 @@ while (( SECONDS < deadline )); do
     tail -40 "${log}" >&2 || true
     exit 1
   fi
-  if curl -sf "http://127.0.0.1:${http_port}/v1/health/ready" >/dev/null 2>&1; then
+  http_ok=0 grpc_ok=0
+  curl -sf "http://127.0.0.1:${http_port}/v1/health/ready" >/dev/null 2>&1 && http_ok=1
+  grpc_listening "${grpc_port}" && grpc_ok=1
+  if (( http_ok && grpc_ok )); then
     step "PASS"
-    echo "LipSync NIM is ready on :${http_port}"
+    echo "LipSync NIM is ready on HTTP :${http_port} and gRPC :${grpc_port}"
     curl -s "http://127.0.0.1:${http_port}/v1/health/ready" || true
     echo
     echo "Recent log:"
@@ -194,12 +224,12 @@ while (( SECONDS < deadline )); do
     exit 0
   fi
   if (( (SECONDS % 30) == 0 )); then
-    echo "[$(date -Iseconds)] still waiting ... cache $(du -sh "${cache}" 2>/dev/null | awk '{print $1}')"
+    echo "[$(date -Iseconds)] waiting ... HTTP=${http_ok} gRPC=${grpc_ok} cache $(du -sh "${cache}" 2>/dev/null | awk '{print $1}')"
     tail -3 "${log}" 2>/dev/null | sed 's/^/  | /' || true
   fi
   sleep 5
 done
 
-echo "ERROR: timed out after ${timeout_s}s waiting for :${http_port}/v1/health/ready" >&2
+echo "ERROR: timed out after ${timeout_s}s waiting for HTTP :${http_port} and gRPC :${grpc_port}" >&2
 tail -40 "${log}" >&2 || true
 exit 1

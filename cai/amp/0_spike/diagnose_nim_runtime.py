@@ -32,6 +32,7 @@ from cai.lib.paths import NIM_ENDPOINTS_JSON, PROJECT_ROOT  # noqa: E402
 REPORT_VERSION = "1.0"
 NIM_TYPES = ("lipsync", "asd")
 DEFAULT_PORTS = {"lipsync": 8004, "asd": 8005}
+DEFAULT_GRPC_PORTS = {"lipsync": 50054, "asd": 50055}
 LOG_PATHS = {
     "lipsync": (
         PROJECT_ROOT / "cai/config/lipsync_nim.log",
@@ -96,6 +97,14 @@ def _probe_http(url: str, *, timeout: float = 5.0) -> dict[str, Any]:
         return {"url": url, "ok": False, "status": exc.code, "error": str(exc)}
     except Exception as exc:  # noqa: BLE001
         return {"url": url, "ok": False, "error": str(exc)}
+
+
+def _probe_tcp(host: str, port: int, *, timeout: float = 3.0) -> dict[str, Any]:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return {"host": host, "port": port, "ok": True}
+    except Exception as exc:  # noqa: BLE001
+        return {"host": host, "port": port, "ok": False, "error": str(exc)}
 
 
 def _parse_shm_from_log(tail: list[str]) -> str | None:
@@ -230,7 +239,11 @@ def _remote_health(endpoints: dict[str, Any]) -> dict[str, Any]:
             results[nim_type] = {"skipped": True, "reason": "no pod_ip in nim_endpoints.json"}
             continue
         url = f"http://{host}:{http_port}/v1/health/ready"
-        results[nim_type] = _probe_http(url)
+        grpc_port = entry.get("grpc_port") or DEFAULT_GRPC_PORTS.get(nim_type, 0)
+        results[nim_type] = {
+            "http": _probe_http(url),
+            "grpc": _probe_tcp(host, int(grpc_port)) if grpc_port else {"skipped": True},
+        }
     return {"probes": results}
 
 
@@ -369,12 +382,20 @@ def main() -> int:
 
     # Localhost probes (only meaningful if run inside the NIM app itself)
     report["localhost_health"] = {
-        nim: _probe_http(f"http://127.0.0.1:{port}/v1/health/ready")
+        nim: {
+            "http": _probe_http(f"http://127.0.0.1:{port}/v1/health/ready"),
+            "grpc": _probe_tcp("127.0.0.1", DEFAULT_GRPC_PORTS[nim]),
+        }
         for nim, port in DEFAULT_PORTS.items()
     }
     print("[localhost health — usually fails in Workbench session, OK to ignore]")
     for nim, probe in report["localhost_health"].items():
-        print(f"  {nim} :{DEFAULT_PORTS[nim]} -> ok={probe.get('ok')} {probe.get('error', probe.get('status', ''))}")
+        http_ok = probe["http"].get("ok")
+        grpc_ok = probe["grpc"].get("ok")
+        print(
+            f"  {nim} HTTP :{DEFAULT_PORTS[nim]} ok={http_ok}  "
+            f"gRPC :{DEFAULT_GRPC_PORTS[nim]} ok={grpc_ok}"
+        )
     print()
 
     report["git_head"] = _run(["git", "-C", str(PROJECT_ROOT), "log", "-1", "--oneline"])
@@ -387,10 +408,14 @@ def main() -> int:
     if launcher.is_file():
         text = launcher.read_text(errors="replace")
         report["launcher"]["has_shm_failfast"] = "ERROR: /dev/shm is only" in text
+        report["launcher"]["has_triton_link"] = "link_bundle_tritonserver" in text
+        report["launcher"]["has_model_prepare"] = "prepare-bundled-nim-models" in text
 
     print("[repo]")
     print(f"  HEAD: {report['git_head'].get('stdout', '?')}")
     print(f"  run-bundled-nim.sh fail-fast shm check: {report['launcher']['has_shm_failfast']}")
+    print(f"  run-bundled-nim.sh triton link fix: {report['launcher'].get('has_triton_link', False)}")
+    print(f"  run-bundled-nim.sh model prepare fix: {report['launcher'].get('has_model_prepare', False)}")
     print()
 
     print("=" * 70)
