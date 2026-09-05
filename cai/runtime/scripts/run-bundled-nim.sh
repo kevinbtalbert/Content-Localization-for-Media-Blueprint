@@ -149,10 +149,16 @@ fi
 
 # NIM start_server is a Python script (nimlib). CAI runtime is Python 3.13; the bundle ships
 # its own interpreter + site-packages under usr/local/ from the nvcr.io NIM image.
+nim_python=""
+nim_site=""
+
 resolve_nim_python() {
   local bundle="$1"
   local py site nimlib_dir
   local -a pythons=() nimlib_dirs=()
+
+  nim_python=""
+  nim_site=""
 
   while IFS= read -r nimlib_dir; do
     nimlib_dirs+=("${nimlib_dir}")
@@ -170,10 +176,11 @@ resolve_nim_python() {
     [[ -x "${py}" ]] || continue
     for nimlib_dir in "${nimlib_dirs[@]}"; do
       site="$(dirname "${nimlib_dir}")"
-      # nimlib logs to stdout on import; must not pollute $(resolve_nim_python) capture.
+      # nimlib logs to stdout on import; must not pollute captured output.
       if PYTHONPATH="${site}" "${py}" -c "import nimlib" >/dev/null 2>&1; then
+        nim_site="${site}"
+        nim_python="${py}"
         export PYTHONPATH="${site}${PYTHONPATH:+:${PYTHONPATH}}"
-        printf '%s\n' "${py}"
         return 0
       fi
     done
@@ -211,14 +218,7 @@ if [[ ! -x "${entrypoint}" ]]; then
 fi
 
 start_server="$(resolve_start_server "${bundle_root}")"
-nim_python="$(resolve_nim_python "${bundle_root}" || true)"
-# Defense in depth: only accept a single absolute python path (never log lines).
-if [[ "${nim_python}" == *$'\n'* ]]; then
-  nim_python="${nim_python##*$'\n'}"
-fi
-if [[ -n "${nim_python}" && "${nim_python}" != /* ]]; then
-  nim_python=""
-fi
+resolve_nim_python "${bundle_root}" || true
 if [[ -z "${start_server}" || ! -f "${start_server}" ]]; then
   echo "ERROR: could not find NIM start_server under ${bundle_root}." >&2
   echo "  Expected usr/local/bin/start_server or opt/nim/start_server.sh from the NIM image." >&2
@@ -235,30 +235,40 @@ if [[ -z "${nim_python}" ]]; then
 fi
 chmod +x "${start_server}" 2>/dev/null || true
 
-# nvidia_entrypoint.sh expects a single script name under opt/nim (e.g. start_server.sh).
-# It prepends opt/nim/ to relative paths — do not pass python + start_server as raw args.
-launch_wrapper="${bundle_root}/opt/nim/.bundled_nim_launch.sh"
-if [[ ! -w "${bundle_root}/opt/nim" ]]; then
-  echo "ERROR: ${bundle_root}/opt/nim is not writable — cannot create NIM launch wrapper." >&2
+# nvidia_entrypoint.sh cds to /opt/nim (not the bundle prefix) before exec — wrapper must live there.
+launch_wrapper="/opt/nim/.bundled_nim_launch_${nim_type}.sh"
+if [[ ! -d /opt/nim ]] || [[ ! -w /opt/nim ]]; then
+  echo "ERROR: /opt/nim is not writable — cannot create NIM launch wrapper." >&2
   exit 1
 fi
-printf '#!/usr/bin/env bash\nset -euo pipefail\nexec "%s" "%s"\n' "${nim_python}" "${start_server}" >"${launch_wrapper}"
+nim_workdir="${bundle_root}/opt/nim"
+if [[ ! -d "${nim_workdir}" ]]; then
+  nim_workdir="/opt/nim"
+fi
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  "export PYTHONPATH=\"${nim_site}\${PYTHONPATH:+:\${PYTHONPATH}}\"" \
+  "cd \"${nim_workdir}\"" \
+  "exec \"${nim_python}\" \"${start_server}\"" \
+  >"${launch_wrapper}"
 chmod +x "${launch_wrapper}"
-
-# Official NIM images use WORKDIR /opt/nim; keep relative paths in start_server working.
-if [[ -d "${bundle_root}/opt/nim" ]]; then
-  cd "${bundle_root}/opt/nim"
+if [[ ! -x "${launch_wrapper}" ]]; then
+  echo "ERROR: failed to create launch wrapper at ${launch_wrapper}" >&2
+  exit 1
 fi
 
-echo "Starting bundled ${nim_type} NIM: ${entrypoint} .bundled_nim_launch.sh"
+echo "Starting bundled ${nim_type} NIM: ${entrypoint} ${launch_wrapper}"
 echo "  NIM_CACHE_PATH=${NIM_CACHE_PATH}"
 echo "  NIM_CACHE_DIR=${NIM_CACHE_DIR}"
 echo "  NIM_PYTHON=${nim_python} ($("${nim_python}" --version 2>&1 | head -1))"
+echo "  NIM_SITE=${nim_site}"
 echo "  START_SERVER=${start_server}"
+echo "  LAUNCH_WRAPPER=${launch_wrapper}"
 echo "  PYTHONPATH=${PYTHONPATH:-}"
 echo "  NGC_API_KEY set: $([ -n "${NGC_API_KEY:-}" ] && echo yes || echo NO)"
 echo "  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-unset}"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi -L || true
 fi
-exec "${entrypoint}" ".bundled_nim_launch.sh"
+exec "${entrypoint}" "${launch_wrapper}"

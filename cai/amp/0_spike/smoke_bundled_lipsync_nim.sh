@@ -73,12 +73,12 @@ chmod +x "${launcher}" 2>/dev/null || true
 echo "Bundle entrypoint: $(tr -d '\n' <"${bundle}/entrypoint")"
 echo "Launcher:          ${launcher}"
 
-if ! grep -q '\.bundled_nim_launch\.sh' "${launcher}"; then
-  echo "ERROR: launcher is missing the .bundled_nim_launch.sh wrapper fix." >&2
+if ! grep -q '/opt/nim/\.bundled_nim_launch_' "${launcher}"; then
+  echo "ERROR: launcher is missing the /opt/nim launch wrapper fix." >&2
   echo "  Run: git pull origin main" >&2
   exit 1
 fi
-echo "Launcher wrapper fix: present"
+echo "Launcher /opt/nim wrapper fix: present"
 
 step "Bundled python + nimlib"
 py=""
