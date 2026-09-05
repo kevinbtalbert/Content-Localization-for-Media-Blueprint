@@ -36,11 +36,17 @@ done
 
 mkdir -p "${dest}/usr/local/bin" "${dest}/usr/bin"
 if [[ -d "${src}/usr/local/bin" ]]; then
-  cp -aL "${src}/usr/local/bin/." "${dest}/usr/local/bin/"
+  # Preserve tree first; some NIM images have broken symlinks (ncu, nsys) that break cp -aL on the whole dir.
+  cp -a "${src}/usr/local/bin/." "${dest}/usr/local/bin/" 2>/dev/null || true
+  for bin in python3 python3.12 python3.11 python3.10 python start_server; do
+    if [[ -e "${src}/usr/local/bin/${bin}" ]]; then
+      cp -aL "${src}/usr/local/bin/${bin}" "${dest}/usr/local/bin/${bin}" 2>/dev/null || true
+    fi
+  done
 fi
 for py in python3 python3.12 python3.11 python3.10 python; do
   if [[ -e "${src}/usr/bin/${py}" ]]; then
-    cp -aL "${src}/usr/bin/${py}" "${dest}/usr/bin/${py}"
+    cp -aL "${src}/usr/bin/${py}" "${dest}/usr/bin/${py}" 2>/dev/null || true
   fi
 done
 
