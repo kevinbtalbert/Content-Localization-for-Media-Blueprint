@@ -66,11 +66,12 @@ py="$(find "${dest}" \( -path '*/usr/bin/python3*' -o -path '*/usr/local/bin/pyt
 nimlib_dir="$(find "${dest}" -path '*/dist-packages/nimlib' -type d 2>/dev/null | head -1)"
 site="$(dirname "${nimlib_dir}")"
 export LD_LIBRARY_PATH="${dest}/usr/local/lib:${dest}/usr/local/lib64:${dest}/usr/lib/x86_64-linux-gnu:${dest}/usr/lib:${dest}/lib/x86_64-linux-gnu:${dest}/lib:${LD_LIBRARY_PATH:-}"
-if ! PYTHONPATH="${site}" "${py}" -c "import nimlib; print('nimlib import OK:', nimlib.__file__)"; then
+if ! PYTHONPATH="${site}" "${py}" -c "import nimlib" >/dev/null 2>&1; then
   echo "ERROR: bundled python cannot import nimlib under ${dest}" >&2
   echo "  python=${py}  site=${site}" >&2
   exit 1
 fi
+echo "nimlib import OK: ${nimlib_dir}/__init__.py"
 
 if [[ ! -f "${dest}/usr/local/bin/start_server" ]]; then
   echo "ERROR: usr/local/bin/start_server missing under ${dest}" >&2

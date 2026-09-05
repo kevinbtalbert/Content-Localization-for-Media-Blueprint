@@ -170,7 +170,8 @@ resolve_nim_python() {
     [[ -x "${py}" ]] || continue
     for nimlib_dir in "${nimlib_dirs[@]}"; do
       site="$(dirname "${nimlib_dir}")"
-      if PYTHONPATH="${site}" "${py}" -c "import nimlib" 2>/dev/null; then
+      # nimlib logs to stdout on import; must not pollute $(resolve_nim_python) capture.
+      if PYTHONPATH="${site}" "${py}" -c "import nimlib" >/dev/null 2>&1; then
         export PYTHONPATH="${site}${PYTHONPATH:+:${PYTHONPATH}}"
         printf '%s\n' "${py}"
         return 0
@@ -211,6 +212,13 @@ fi
 
 start_server="$(resolve_start_server "${bundle_root}")"
 nim_python="$(resolve_nim_python "${bundle_root}" || true)"
+# Defense in depth: only accept a single absolute python path (never log lines).
+if [[ "${nim_python}" == *$'\n'* ]]; then
+  nim_python="${nim_python##*$'\n'}"
+fi
+if [[ -n "${nim_python}" && "${nim_python}" != /* ]]; then
+  nim_python=""
+fi
 if [[ -z "${start_server}" || ! -f "${start_server}" ]]; then
   echo "ERROR: could not find NIM start_server under ${bundle_root}." >&2
   echo "  Expected usr/local/bin/start_server or opt/nim/start_server.sh from the NIM image." >&2
@@ -227,29 +235,30 @@ if [[ -z "${nim_python}" ]]; then
 fi
 chmod +x "${start_server}" 2>/dev/null || true
 
-# start_server.sh execs /usr/local/bin/start_server (absolute). Run nimlib with the bundled
-# NIM interpreter so packages and native extensions match the nvcr.io image.
-if [[ "${start_server}" == */usr/local/bin/start_server ]]; then
-  server_argv=("${nim_python}" "${start_server}")
-elif [[ "${start_server}" == *.sh ]]; then
-  server_argv=("${nim_python}" "-m" "nimlib.start_server")
-else
-  server_argv=("${nim_python}" "${start_server}")
+# nvidia_entrypoint.sh expects a single script name under opt/nim (e.g. start_server.sh).
+# It prepends opt/nim/ to relative paths — do not pass python + start_server as raw args.
+launch_wrapper="${bundle_root}/opt/nim/.bundled_nim_launch.sh"
+if [[ ! -w "${bundle_root}/opt/nim" ]]; then
+  echo "ERROR: ${bundle_root}/opt/nim is not writable — cannot create NIM launch wrapper." >&2
+  exit 1
 fi
+printf '#!/usr/bin/env bash\nset -euo pipefail\nexec "%s" "%s"\n' "${nim_python}" "${start_server}" >"${launch_wrapper}"
+chmod +x "${launch_wrapper}"
 
 # Official NIM images use WORKDIR /opt/nim; keep relative paths in start_server working.
 if [[ -d "${bundle_root}/opt/nim" ]]; then
   cd "${bundle_root}/opt/nim"
 fi
 
-echo "Starting bundled ${nim_type} NIM: ${entrypoint} ${server_argv[*]}"
+echo "Starting bundled ${nim_type} NIM: ${entrypoint} .bundled_nim_launch.sh"
 echo "  NIM_CACHE_PATH=${NIM_CACHE_PATH}"
 echo "  NIM_CACHE_DIR=${NIM_CACHE_DIR}"
 echo "  NIM_PYTHON=${nim_python} ($("${nim_python}" --version 2>&1 | head -1))"
+echo "  START_SERVER=${start_server}"
 echo "  PYTHONPATH=${PYTHONPATH:-}"
 echo "  NGC_API_KEY set: $([ -n "${NGC_API_KEY:-}" ] && echo yes || echo NO)"
 echo "  NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-unset}"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi -L || true
 fi
-exec "${entrypoint}" "${server_argv[@]}"
+exec "${entrypoint}" ".bundled_nim_launch.sh"

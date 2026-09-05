@@ -270,7 +270,7 @@ See the main [README.md](../README.md) for additional local development options.
 | Docker daemon not running during build | Start Docker Desktop; `docker info` must work before `docker build` |
 | `docker login` or NIM pull fails | Check NGC key and LipSync private access; never commit the key — use `export` in shell only |
 | NIM application fails at startup | Verify `NGC_API_KEY`; first start downloads models (15–30 min) |
-| NIM exits after Triton banner, no `:8004`/`:8005` | **Bundled launcher** must run `nvidia_entrypoint.sh` with NIM `python3` + `start_server` (not bare entrypoint). **`ModuleNotFoundError: nimlib`** or **bundled NIM Python not found** → rebuild the runtime image: `copy-nim-bundle.sh` dereferences `python3` symlinks and copies `usr/bin` + `usr/lib` from the nvcr.io NIM stage. |
+| NIM exits after Triton banner, no `:8004`/`:8005` | **Bundled launcher** runs `nvidia_entrypoint.sh` with a wrapper under `opt/nim/` that execs NIM `python3` + `start_server` (not bare entrypoint, not raw python args — entrypoint prepends `opt/nim/` to relative paths). **`ModuleNotFoundError: nimlib`** or **bundled NIM Python not found** → rebuild the runtime image: `copy-nim-bundle.sh` dereferences `python3` symlinks and copies `usr/bin` + `usr/lib` from the nvcr.io NIM stage. |
 | Controller cannot reach NIM | Check `cai/config/runtime_endpoints.env` pod IPs; verify network policy allows gRPC between pods |
 | AMP timeout on NIM startup | First NIM start downloads models — allow 15–30 min; check NGC key and LipSync private access |
 | Single GPU only | Deploy LipSync only; use `bypass_asd=True` in client requests |
